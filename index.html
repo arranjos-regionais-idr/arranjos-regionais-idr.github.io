@@ -48,6 +48,10 @@
   .busca input { width: 100%; padding: 7px 8px; border: 1px solid var(--borda); border-radius: 6px; }
   .dica { font-size: 12px; color: var(--suave); padding: 6px 10px 0; }
   .paleta { overflow: auto; padding: 8px; flex: 1; }
+  .paleta details.grupo { margin: 2px 0; border-bottom: 1px solid var(--borda); }
+  .paleta details.grupo > summary { cursor: pointer; padding: 8px 4px; font-size: 12px; font-weight: 600; color: var(--suave); text-transform: uppercase; letter-spacing: .04em; }
+  .paleta details.grupo.propria > summary { color: var(--verde); }
+  .paleta details.grupo[open] > summary { color: var(--texto); }
   .paleta h4 { margin: 10px 4px 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--suave); }
   .peca { display: flex; align-items: center; gap: 6px; padding: 6px 8px; margin: 0 0 5px; border-radius: 6px; border: 1px solid; cursor: grab; user-select: none; }
   .peca:active { cursor: grabbing; }
@@ -184,7 +188,7 @@
     transversal: { tipo: 'projeto', filtro: 'transversal', rotulo: 'Áreas Transversais' },
     publico: { tipo: 'publico' }, municipio: { tipo: 'municipio' }, tecnico: { tipo: 'tecnico' }
   };
-  var estado = { token: null, perfil: null, regional: null, dados: null, ativo: null, aba: 'cadeia', busca: '', timers: {}, pendentes: 0 };
+  var estado = { token: null, perfil: null, regional: null, dados: null, ativo: null, aba: 'cadeia', abertos: {}, busca: '', timers: {}, pendentes: 0 };
 
   // ---------- chamada ao backend (Apps Script ou simulação local) ----------
   function api(fn) {
@@ -275,7 +279,7 @@
 
   function sair() {
     try { sessionStorage.removeItem('arranjos_sessao'); } catch (e) { /* ok */ }
-    estado.token = null; estado.dados = null; $('cabRegional').textContent = ''; sinal('');
+    estado.token = null; estado.dados = null; estado.abertos = {}; $('cabRegional').textContent = ''; sinal('');
     $('avisoPrazo').classList.add('oculto'); $('telaMontagem').classList.remove('com-aviso');
     mostrar('telaEntrada');
   }
@@ -314,15 +318,27 @@
     var aba = ABAS_PALETA[estado.aba], tipo = aba.tipo, termo = normal(estado.busca), uso = usos(tipo);
     var lista = catalogo(tipo).filter(function (i) {
       return (!aba.filtro || i.tipo === aba.filtro)
-        && (!termo || normal(i.nome + ' ' + (i.formacao || '') + ' ' + (i.municipio || '')).indexOf(termo) >= 0);
+        && (!termo || normal(i.nome + ' ' + (i.formacao || '') + ' ' + (i.municipio || '') + ' ' + (i.funcao || '')).indexOf(termo) >= 0);
     });
-    var grupos = tipo === 'tecnico' ? gruposEquipe(lista) : [[(aba.rotulo || ROTULOS[tipo]), lista]];
-    grupos.forEach(function (g) {
-      if (!g[1].length) return;
-      p.appendChild(el('h4', { text: g[0] + ' (' + g[1].length + ')' }));
-      g[1].forEach(function (i) { p.appendChild(peca(tipo, i, uso)); });
-    });
+    if (tipo === 'tecnico') {
+      gruposEquipe(lista).forEach(function (g, n) { if (g[1].length) p.appendChild(grupoRecolhivel(g[0], g[1], n === 0, !!termo, uso)); });
+    } else {
+      p.appendChild(el('h4', { text: (aba.rotulo || ROTULOS[tipo]) + ' (' + lista.length + ')' }));
+      lista.forEach(function (i) { p.appendChild(peca(tipo, i, uso)); });
+    }
     if (!lista.length) p.appendChild(el('div', { class: 'dica', text: 'Nada encontrado.' }));
+  }
+
+  // Grupo da equipe que abre e fecha pelo título. A própria regional começa aberta; com busca, todos abrem.
+  function grupoRecolhivel(titulo, itens, propria, buscando, uso) {
+    var d = document.createElement('details');
+    d.className = 'grupo' + (propria ? ' propria' : '');
+    var aberto = estado.abertos[titulo];
+    if (buscando || (aberto === undefined ? propria : aberto)) d.open = true;
+    d.appendChild(el('summary', { text: titulo + ' (' + itens.length + ')' }));
+    d.addEventListener('toggle', function () { if (!buscando) estado.abertos[titulo] = d.open; });
+    itens.forEach(function (i) { d.appendChild(peca('tecnico', i, uso)); });
+    return d;
   }
 
   // Equipe: primeiro a da regional; depois as outras regionais, a sede e assessores/chefes.
