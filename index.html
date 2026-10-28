@@ -365,7 +365,8 @@
   }
 
   function detalheTecnico(t) {
-    var onde = daMinhaRegional(t) ? '' : (t.grupo === 'sede' ? 'Sede' : 'Regional ' + t.regional);
+    // Assessores e chefes já trazem o local na própria função; os demais mostram de onde são.
+    var onde = daMinhaRegional(t) || t.grupo === 'gestao' ? '' : (t.grupo === 'sede' ? 'Sede' : 'Regional ' + t.regional);
     return [t.funcao, onde, t.formacao, t.municipio].filter(Boolean).join(' · ');
   }
 
