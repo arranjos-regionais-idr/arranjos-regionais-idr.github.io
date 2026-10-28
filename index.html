@@ -58,6 +58,7 @@
   .t-publico { background: var(--publico); border-color: var(--publico-b); }
   .t-municipio { background: var(--mun); border-color: var(--mun-b); }
   .t-tecnico { background: var(--tec); border-color: var(--tec-b); }
+  .chip.fora { border-style: dashed; }
 
   main { overflow: auto; padding: 16px; min-height: 0; }
   .barra { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
@@ -315,13 +316,36 @@
       return (!aba.filtro || i.tipo === aba.filtro)
         && (!termo || normal(i.nome + ' ' + (i.formacao || '') + ' ' + (i.municipio || '')).indexOf(termo) >= 0);
     });
-    p.appendChild(el('h4', { text: (aba.rotulo || ROTULOS[tipo]) + ' (' + lista.length + ')' }));
-    lista.forEach(function (i) { p.appendChild(peca(tipo, i, uso)); });
+    var grupos = tipo === 'tecnico' ? gruposEquipe(lista) : [[(aba.rotulo || ROTULOS[tipo]), lista]];
+    grupos.forEach(function (g) {
+      if (!g[1].length) return;
+      p.appendChild(el('h4', { text: g[0] + ' (' + g[1].length + ')' }));
+      g[1].forEach(function (i) { p.appendChild(peca(tipo, i, uso)); });
+    });
     if (!lista.length) p.appendChild(el('div', { class: 'dica', text: 'Nada encontrado.' }));
   }
 
+  // Equipe: primeiro a da regional; depois as outras regionais, a sede e assessores/chefes.
+  function daMinhaRegional(t) { return (t.grupo || 'regional') === 'regional' && t.regional === estado.regional; }
+
+  function gruposEquipe(lista) {
+    var outras = {};
+    lista.forEach(function (t) {
+      if ((t.grupo || 'regional') === 'regional' && !daMinhaRegional(t)) (outras[t.regional] = outras[t.regional] || []).push(t);
+    });
+    return [['Equipe da regional ' + estado.regional, lista.filter(daMinhaRegional)]]
+      .concat(Object.keys(outras).sort().map(function (r) { return ['Regional ' + r, outras[r]]; }))
+      .concat([['Sede', lista.filter(function (t) { return t.grupo === 'sede'; })],
+               ['Assessores e chefes', lista.filter(function (t) { return t.grupo === 'gestao'; })]]);
+  }
+
+  function detalheTecnico(t) {
+    var onde = daMinhaRegional(t) ? '' : (t.grupo === 'sede' ? 'Sede' : 'Regional ' + t.regional);
+    return [t.funcao, onde, t.formacao, t.municipio].filter(Boolean).join(' · ');
+  }
+
   function peca(tipo, item, uso) {
-    var sub = tipo === 'tecnico' ? [item.formacao, item.municipio].filter(Boolean).join(' · ') : '';
+    var sub = tipo === 'tecnico' ? detalheTecnico(item) : '';
     var n = el('div', {
       class: 'peca t-' + tipo + (item.tipo ? ' ' + item.tipo : ''), draggable: 'true', tabindex: '0',
       title: 'Arraste para um arranjo ou clique para incluir no arranjo selecionado'
@@ -405,7 +429,9 @@
     var chips = el('div', { class: 'chips' });
     cod.forEach(function (codigo) {
       var item = catalogo(tipo).filter(function (i) { return i.codigo === codigo; })[0] || {};
-      var ch = el('span', { class: 'chip t-' + tipo + (item.tipo ? ' ' + item.tipo : '') }, [nomeDe(tipo, codigo)]);
+      var deFora = tipo === 'tecnico' && item.codigo && !daMinhaRegional(item);
+      var ch = el('span', { class: 'chip t-' + tipo + (item.tipo ? ' ' + item.tipo : '') + (deFora ? ' fora' : ''),
+        title: tipo === 'tecnico' ? detalheTecnico(item) : '' }, [nomeDe(tipo, codigo)]);
       if (!travado) ch.appendChild(el('button', { 'aria-label': 'Remover', text: '×', onclick: function (ev) {
         ev.stopPropagation(); cod.splice(cod.indexOf(codigo), 1); alterou(a);
       } }));
@@ -487,7 +513,7 @@
     var incompletos = d.arranjos.filter(function (a) { return !a.itens.projeto.length || !a.itens.municipio.length || !a.itens.tecnico.length; });
     if (soContar) return incompletos.length;
     var semMun = catalogo('municipio').filter(function (m) { return !usoMun[m.codigo]; });
-    var semTec = catalogo('tecnico').filter(function (t) { return !usoTec[t.codigo]; });
+    var semTec = catalogo('tecnico').filter(function (t) { return daMinhaRegional(t) && !usoTec[t.codigo]; });
     var repetidos = catalogo('tecnico').filter(function (t) { return usoTec[t.codigo] > 1; });
     var corpo = $('corpoConferencia'); corpo.innerHTML = '';
     function secao(titulo, itens, fmt, vazio) {
@@ -499,7 +525,7 @@
       return el('span', { class: 'chip', text: a.nome + ' — falta: ' + falta.join(', ') });
     }, 'Todos os arranjos têm projeto, municípios e equipe.');
     secao('Municípios da regional sem nenhum arranjo', semMun, function (m) { return el('span', { class: 'chip t-municipio', text: m.nome }); }, 'Todos os municípios estão em algum arranjo.');
-    secao('Técnicos sem arranjo', semTec, function (t) { return el('span', { class: 'chip t-tecnico', text: t.nome }); }, 'Todos os técnicos estão em algum arranjo.');
+    secao('Técnicos da regional sem arranjo', semTec, function (t) { return el('span', { class: 'chip t-tecnico', text: t.nome }); }, 'Todos os técnicos estão em algum arranjo.');
     secao('Técnicos em mais de um arranjo (informativo: o peso será definido depois pelas UPFs)', repetidos, function (t) {
       return el('span', { class: 'chip t-tecnico', text: t.nome + ' · ' + usoTec[t.codigo] + ' arranjos' });
     }, 'Nenhum técnico repetido.');
