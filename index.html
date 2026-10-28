@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arranjos Regionais | IDR-Paraná</title>
+<style>
+  :root {
+    --verde: #1f6b3a; --verde-2: #2f8a4e; --verde-claro: #e7f3ea; --fundo: #f5f6f3;
+    --texto: #1d2420; --suave: #5d6a62; --borda: #d6ddd7; --branco: #fff;
+    --cadeia: #e9f1fb; --cadeia-b: #9dbbe3; --transv: #fbf1e3; --transv-b: #e3bf8a;
+    --publico: #f3eafb; --publico-b: #c3a3e2; --mun: #e8f6f3; --mun-b: #8fcbbd;
+    --tec: #fdecec; --tec-b: #e6a3a3; --alerta: #b45309; --erro: #b91c1c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--texto); background: var(--fundo); }
+  button, input, select, textarea { font: inherit; }
+  button { cursor: pointer; border: 1px solid var(--borda); background: var(--branco); border-radius: 6px; padding: 6px 12px; }
+  button.primario { background: var(--verde); color: #fff; border-color: var(--verde); }
+  button.primario:hover { background: var(--verde-2); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  header { background: var(--verde); color: #fff; padding: 10px 16px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  header .reg { opacity: .9; }
+  header .dir { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  header button { background: transparent; color: #fff; border-color: rgba(255,255,255,.5); }
+  .oculto { display: none !important; }
+  .aviso { padding: 8px 16px; background: #fff7e6; border-bottom: 1px solid #f1d9a8; color: var(--alerta); }
+  .aviso.fechado { background: #fde8e8; border-color: #f3b4b4; color: var(--erro); }
+
+  /* Entrada */
+  #telaEntrada { display: grid; place-items: center; min-height: calc(100vh - 50px); padding: 16px; }
+  .cartao-entrada { background: var(--branco); border: 1px solid var(--borda); border-radius: 10px; padding: 24px; width: 100%; max-width: 420px; }
+  .cartao-entrada h2 { margin: 0 0 4px; font-size: 20px; }
+  .cartao-entrada p { color: var(--suave); margin: 0 0 16px; }
+  .campo { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+  .campo input, .campo select { padding: 8px; border: 1px solid var(--borda); border-radius: 6px; }
+  .erro { color: var(--erro); min-height: 20px; }
+
+  /* Montagem */
+  #telaMontagem { display: grid; grid-template-columns: 320px 1fr; height: calc(100vh - 50px); }
+  #telaMontagem.com-aviso { height: calc(100vh - 88px); }
+  aside { background: var(--branco); border-right: 1px solid var(--borda); display: flex; flex-direction: column; min-height: 0; }
+  .abas { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--borda); }
+  .abas button { border: 0; border-radius: 0; padding: 10px 4px; background: transparent; border-bottom: 3px solid transparent; font-size: 13px; }
+  .abas button.ativa { border-bottom-color: var(--verde); font-weight: 600; }
+  .busca { padding: 8px; border-bottom: 1px solid var(--borda); }
+  .busca input { width: 100%; padding: 7px 8px; border: 1px solid var(--borda); border-radius: 6px; }
+  .dica { font-size: 12px; color: var(--suave); padding: 6px 10px 0; }
+  .paleta { overflow: auto; padding: 8px; flex: 1; }
+  .paleta h4 { margin: 10px 4px 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--suave); }
+  .peca { display: flex; align-items: center; gap: 6px; padding: 6px 8px; margin: 0 0 5px; border-radius: 6px; border: 1px solid; cursor: grab; user-select: none; }
+  .peca:active { cursor: grabbing; }
+  .peca .sub { font-size: 11px; color: var(--suave); }
+  .peca .uso { margin-left: auto; font-size: 11px; background: rgba(0,0,0,.07); border-radius: 10px; padding: 0 7px; white-space: nowrap; }
+  .t-projeto.cadeia { background: var(--cadeia); border-color: var(--cadeia-b); }
+  .t-projeto.transversal { background: var(--transv); border-color: var(--transv-b); }
+  .t-publico { background: var(--publico); border-color: var(--publico-b); }
+  .t-municipio { background: var(--mun); border-color: var(--mun-b); }
+  .t-tecnico { background: var(--tec); border-color: var(--tec-b); }
+
+  main { overflow: auto; padding: 16px; min-height: 0; }
+  .barra { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  .barra .estado { margin-left: auto; color: var(--suave); font-size: 13px; }
+  .grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; align-items: start; }
+  .arranjo { background: var(--branco); border: 2px solid var(--borda); border-radius: 10px; padding: 12px; }
+  .arranjo.ativo { border-color: var(--verde); box-shadow: 0 0 0 3px var(--verde-claro); }
+  .arranjo.sobre { border-color: var(--verde-2); background: #fbfefb; }
+  .arranjo .topo { display: flex; gap: 8px; align-items: center; }
+  .arranjo input.nome { flex: 1; font-size: 16px; font-weight: 600; border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; }
+  .arranjo input.nome:hover, .arranjo input.nome:focus { border-color: var(--borda); }
+  .arranjo textarea { width: 100%; resize: vertical; min-height: 38px; border: 1px solid var(--borda); border-radius: 6px; padding: 6px; margin: 6px 0; }
+  .arranjo .psh { font-size: 13px; color: var(--suave); display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+  .zona { border: 1px dashed var(--borda); border-radius: 8px; padding: 6px; margin-top: 8px; min-height: 40px; }
+  .zona .titulo { font-size: 12px; font-weight: 600; color: var(--suave); display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .zona .titulo button { font-size: 11px; padding: 1px 6px; }
+  .zona .vazia { font-size: 12px; color: #9aa59e; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip { border: 1px solid; border-radius: 14px; padding: 2px 4px 2px 9px; font-size: 12px; display: inline-flex; align-items: center; gap: 2px; }
+  .chip button { border: 0; background: transparent; padding: 0 4px; font-size: 14px; line-height: 1; }
+  .rodape-card { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 12px; color: var(--suave); }
+  .rodape-card button { font-size: 12px; color: var(--erro); border-color: transparent; }
+  .vazio-geral { padding: 40px; text-align: center; color: var(--suave); border: 2px dashed var(--borda); border-radius: 10px; background: var(--branco); }
+
+  /* Conferência */
+  dialog { border: 1px solid var(--borda); border-radius: 10px; max-width: 720px; width: calc(100% - 32px); padding: 0; }
+  dialog .cab { padding: 12px 16px; border-bottom: 1px solid var(--borda); display: flex; justify-content: space-between; align-items: center; }
+  dialog .corpo { padding: 12px 16px; max-height: 70vh; overflow: auto; }
+  dialog h3 { margin: 0; font-size: 16px; }
+  dialog h4 { margin: 14px 0 6px; font-size: 14px; }
+  .ok { color: var(--verde); }
+
+  /* Painel */
+  #telaPainel { padding: 16px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .kpi { background: var(--branco); border: 1px solid var(--borda); border-radius: 10px; padding: 12px; }
+  .kpi b { display: block; font-size: 24px; }
+  .kpi span { color: var(--suave); font-size: 12px; }
+  table { border-collapse: collapse; width: 100%; background: var(--branco); }
+  th, td { border-bottom: 1px solid var(--borda); padding: 6px 8px; text-align: left; vertical-align: top; font-size: 13px; }
+  th { background: var(--verde-claro); position: sticky; top: 0; }
+  td.num, th.num { text-align: right; }
+  .bloco { background: var(--branco); border: 1px solid var(--borda); border-radius: 10px; padding: 12px; margin-bottom: 14px; overflow: auto; }
+  .bloco h3 { margin: 0 0 8px; font-size: 15px; }
+  .barra-h { height: 10px; background: var(--verde-2); border-radius: 5px; }
+
+  @media (max-width: 800px) {
+    #telaMontagem { grid-template-columns: 1fr; height: auto; }
+    aside { max-height: 45vh; border-right: 0; border-bottom: 1px solid var(--borda); }
+    .grade { grid-template-columns: 1fr; }
+  }
+</style>
+<script>window.API_URL = "https://script.google.com/macros/s/AKfycbz7SbwrUPePl_m-6q6rjYw5qhx8p0jI6rV3CavE1VrZDC6dsJtIELQ950g0EvTYX9_PNQ/exec";</script>
+</head>
+<body>
+<header>
+  <h1>Arranjos Regionais 2027</h1>
+  <span class="reg" id="cabRegional"></span>
+  <div class="dir">
+    <span id="cabSalvo" aria-live="polite"></span>
+    <button id="btnSair" class="oculto">Sair</button>
+  </div>
+</header>
+<div id="avisoPrazo" class="aviso oculto"></div>
+
+<section id="telaEntrada">
+  <div class="cartao-entrada">
+    <h2>Montagem dos arranjos regionais</h2>
+    <p>Escolha a sua regional e informe o código recebido da ASPLAN.</p>
+    <div class="campo">
+      <label for="selRegional">Regional</label>
+      <select id="selRegional"><option value="">Carregando…</option></select>
+    </div>
+    <div class="campo">
+      <label for="inpCodigo">Código de acesso</label>
+      <input id="inpCodigo" autocomplete="off" placeholder="XXXX-XXXX" maxlength="9">
+    </div>
+    <div class="erro" id="erroEntrada" role="alert"></div>
+    <button class="primario" id="btnEntrar" style="width:100%">Entrar</button>
+  </div>
+</section>
+
+<section id="telaMontagem" class="oculto">
+  <aside>
+    <div class="abas" role="tablist">
+      <button data-aba="projeto" class="ativa">Projetos</button>
+      <button data-aba="publico">Público</button>
+      <button data-aba="municipio">Municípios</button>
+      <button data-aba="tecnico">Equipe</button>
+    </div>
+    <div class="busca"><input id="inpBusca" placeholder="Buscar…" aria-label="Buscar peças"></div>
+    <div class="dica">Arraste uma peça até um arranjo, ou clique no arranjo e depois na peça.</div>
+    <div class="paleta" id="paleta"></div>
+  </aside>
+  <main>
+    <div class="barra">
+      <button class="primario" id="btnNovo">+ Novo arranjo</button>
+      <button id="btnConferir">Conferência</button>
+      <button id="btnConcluir">Marcar regional como concluída</button>
+      <span class="estado" id="estadoRegional"></span>
+    </div>
+    <div class="grade" id="grade"></div>
+  </main>
+</section>
+
+<section id="telaPainel" class="oculto"></section>
+
+<dialog id="dlgConferencia">
+  <div class="cab"><h3>Conferência da regional</h3><button id="btnFecharConf">Fechar</button></div>
+  <div class="corpo" id="corpoConferencia"></div>
+</dialog>
+
+<script>
+(function () {
+  'use strict';
+
+  var ROTULOS = { projeto: 'Projetos', publico: 'Público', municipio: 'Municípios', tecnico: 'Equipe' };
+  var ORDEM = ['projeto', 'publico', 'municipio', 'tecnico'];
+  var estado = { token: null, perfil: null, regional: null, dados: null, ativo: null, aba: 'projeto', busca: '', timers: {}, pendentes: 0 };
+
+  // ---------- chamada ao backend (Apps Script ou simulação local) ----------
+  function api(fn) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function (ok, falha) {
+      if (window.API_URL) {
+        // GitHub Pages: text/plain evita o preflight de CORS, que o Apps Script não atende.
+        fetch(window.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: fn, args: args }) })
+          .then(function (r) { if (!r.ok) throw new Error('Falha de comunicação (' + r.status + ').'); return r.json(); })
+          .then(function (j) { if (j.ok) ok(j.dados); else falha(new Error(j.erro || 'Erro no servidor.')); })
+          .catch(function (e) { falha(e instanceof Error ? e : new Error(String(e))); });
+      } else if (window.google && google.script && google.script.run) {
+        var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) { falha(e && e.message ? e : new Error(String(e))); });
+        r[fn].apply(r, args);
+      } else if (window.MOCK_API) {
+        try { setTimeout(function () { try { ok(window.MOCK_API[fn].apply(null, args)); } catch (e) { falha(e); } }, 150); } catch (e) { falha(e); }
+      } else {
+        falha(new Error('Backend indisponível.'));
+      }
+    });
+  }
+
+  function $(id) { return document.getElementById(id); }
+  function el(tag, attrs, filhos) {
+    var n = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      if (k === 'class') n.className = attrs[k];
+      else if (k === 'text') n.textContent = attrs[k];
+      else if (k.slice(0, 2) === 'on') n.addEventListener(k.slice(2), attrs[k]);
+      else n.setAttribute(k, attrs[k]);
+    });
+    (filhos || []).forEach(function (f) { if (f) n.appendChild(typeof f === 'string' ? document.createTextNode(f) : f); });
+    return n;
+  }
+  function normal(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+  function mostrar(tela) {
+    ['telaEntrada', 'telaMontagem', 'telaPainel'].forEach(function (t) { $(t).classList.toggle('oculto', t !== tela); });
+    $('btnSair').classList.toggle('oculto', tela === 'telaEntrada');
+  }
+  function sinal(txt) { $('cabSalvo').textContent = txt; }
+
+  // ---------- entrada ----------
+  function iniciar() {
+    api('listarRegionais').then(function (lista) {
+      var sel = $('selRegional');
+      sel.innerHTML = '';
+      sel.appendChild(el('option', { value: '', text: 'Selecione…' }));
+      lista.forEach(function (r) { sel.appendChild(el('option', { value: r, text: r })); });
+      sel.appendChild(el('option', { value: '__ASPLAN__', text: 'ASPLAN (painel estadual)' }));
+    }).catch(function (e) { $('erroEntrada').textContent = e.message; });
+    try {
+      var salvo = JSON.parse(sessionStorage.getItem('arranjos_sessao') || 'null');
+      if (salvo && salvo.token) entrarCom(salvo);
+    } catch (e) { /* sem sessão salva */ }
+  }
+
+  function entrar() {
+    var regional = $('selRegional').value;
+    var codigo = $('inpCodigo').value.trim();
+    $('erroEntrada').textContent = '';
+    if (!regional || !codigo) { $('erroEntrada').textContent = 'Escolha a regional e informe o código.'; return; }
+    $('btnEntrar').disabled = true;
+    api('entrar', regional, codigo).then(function (s) {
+      try { sessionStorage.setItem('arranjos_sessao', JSON.stringify(s)); } catch (e) { /* ok */ }
+      entrarCom(s);
+    }).catch(function (e) { $('erroEntrada').textContent = e.message; })
+      .then(function () { $('btnEntrar').disabled = false; });
+  }
+
+  function entrarCom(s) {
+    estado.token = s.token; estado.perfil = s.perfil; estado.regional = s.regional;
+    if (s.perfil === 'asplan') { $('cabRegional').textContent = 'ASPLAN · painel estadual'; carregarPainel(); return; }
+    $('cabRegional').textContent = 'Regional ' + s.regional;
+    sinal('Carregando…');
+    api('carregarRegional', s.token).then(function (d) {
+      estado.dados = d; sinal('');
+      mostrar('telaMontagem');
+      avisoPrazo(d.estado);
+      desenharTudo();
+    }).catch(erroSessao);
+  }
+
+  function erroSessao(e) {
+    sinal('');
+    if (/Sessão expirada/.test(e.message)) { sair(); $('erroEntrada').textContent = e.message; }
+    else alert(e.message);
+  }
+
+  function sair() {
+    try { sessionStorage.removeItem('arranjos_sessao'); } catch (e) { /* ok */ }
+    estado.token = null; estado.dados = null; $('cabRegional').textContent = ''; sinal('');
+    $('avisoPrazo').classList.add('oculto'); $('telaMontagem').classList.remove('com-aviso');
+    mostrar('telaEntrada');
+  }
+
+  function avisoPrazo(st) {
+    var av = $('avisoPrazo');
+    if (!st.aceitando) {
+      av.textContent = 'O prazo foi encerrado: os arranjos podem ser consultados, mas não alterados.';
+      av.className = 'aviso fechado';
+    } else if (st.prazo) {
+      av.textContent = st.prazo; av.className = 'aviso';
+    } else { av.className = 'aviso oculto'; }
+    $('telaMontagem').classList.toggle('com-aviso', !av.classList.contains('oculto'));
+  }
+
+  function bloqueado() { return !estado.dados.estado.aceitando; }
+
+  // ---------- catálogos e contagem de uso ----------
+  function catalogo(tipo) {
+    var c = estado.dados.catalogos;
+    return { projeto: c.projetos, publico: c.publicos, municipio: c.municipios, tecnico: c.equipe }[tipo];
+  }
+  function nomeDe(tipo, codigo) {
+    var item = catalogo(tipo).filter(function (i) { return i.codigo === codigo; })[0];
+    return item ? item.nome : codigo;
+  }
+  function usos(tipo) {
+    var u = {};
+    estado.dados.arranjos.forEach(function (a) { a.itens[tipo].forEach(function (c) { u[c] = (u[c] || 0) + 1; }); });
+    return u;
+  }
+
+  // ---------- paleta ----------
+  function desenharPaleta() {
+    var p = $('paleta'); p.innerHTML = '';
+    var tipo = estado.aba, termo = normal(estado.busca), uso = usos(tipo);
+    var lista = catalogo(tipo).filter(function (i) {
+      return !termo || normal(i.nome + ' ' + (i.formacao || '') + ' ' + (i.municipio || '')).indexOf(termo) >= 0;
+    });
+    if (tipo === 'projeto') {
+      [['cadeia', 'Cadeias produtivas'], ['transversal', 'Áreas transversais']].forEach(function (g) {
+        var sub = lista.filter(function (i) { return i.tipo === g[0]; });
+        if (sub.length) { p.appendChild(el('h4', { text: g[1] + ' (' + sub.length + ')' })); sub.forEach(function (i) { p.appendChild(peca(tipo, i, uso)); }); }
+      });
+    } else {
+      p.appendChild(el('h4', { text: ROTULOS[tipo] + ' (' + lista.length + ')' }));
+      lista.forEach(function (i) { p.appendChild(peca(tipo, i, uso)); });
+    }
+    if (!lista.length) p.appendChild(el('div', { class: 'dica', text: 'Nada encontrado.' }));
+  }
+
+  function peca(tipo, item, uso) {
+    var sub = tipo === 'tecnico' ? [item.formacao, item.municipio].filter(Boolean).join(' · ') : '';
+    var n = el('div', {
+      class: 'peca t-' + tipo + (item.tipo ? ' ' + item.tipo : ''), draggable: 'true', tabindex: '0',
+      title: 'Arraste para um arranjo ou clique para incluir no arranjo selecionado'
+    }, [
+      el('div', {}, [el('div', { text: item.nome }), sub ? el('div', { class: 'sub', text: sub }) : null]),
+      uso[item.codigo] ? el('span', { class: 'uso', text: uso[item.codigo] + ' arr.' }) : null
+    ]);
+    n.addEventListener('dragstart', function (ev) {
+      ev.dataTransfer.setData('text/plain', JSON.stringify({ tipo: tipo, codigo: item.codigo }));
+      ev.dataTransfer.effectAllowed = 'copy';
+    });
+    function incluirNoAtivo() {
+      if (!estado.ativo) { alert('Clique primeiro no arranjo que vai receber a peça (ou crie um novo).'); return; }
+      adicionar(estado.ativo, tipo, item.codigo);
+    }
+    n.addEventListener('click', incluirNoAtivo);
+    n.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); incluirNoAtivo(); } });
+    return n;
+  }
+
+  // ---------- quadro de arranjos ----------
+  function desenharTudo() { desenharPaleta(); desenharGrade(); desenharEstado(); }
+
+  function desenharEstado() {
+    var d = estado.dados;
+    $('estadoRegional').textContent = d.arranjos.length + ' arranjo(s)' + (d.concluido ? ' · regional marcada como concluída' : '');
+    $('btnConcluir').textContent = d.concluido ? 'Reabrir regional' : 'Marcar regional como concluída';
+    ['btnNovo', 'btnConcluir'].forEach(function (b) { $(b).disabled = bloqueado(); });
+  }
+
+  function desenharGrade() {
+    var g = $('grade'); g.innerHTML = '';
+    if (!estado.dados.arranjos.length) {
+      g.appendChild(el('div', { class: 'vazio-geral' }, [
+        el('p', { text: 'Nenhum arranjo ainda.' }),
+        el('p', { text: 'Clique em “+ Novo arranjo”, dê um nome (ex.: Mulheres do Café) e arraste projetos, público, municípios e equipe.' })
+      ]));
+      return;
+    }
+    estado.dados.arranjos.forEach(function (a) { g.appendChild(cartao(a)); });
+  }
+
+  function cartao(a) {
+    var travado = bloqueado();
+    var c = el('div', { class: 'arranjo' + (estado.ativo === a ? ' ativo' : '') });
+    c.addEventListener('click', function () { if (estado.ativo !== a) { estado.ativo = a; marcarAtivo(); } });
+    c.addEventListener('dragover', function (ev) { if (!travado) { ev.preventDefault(); c.classList.add('sobre'); } });
+    c.addEventListener('dragleave', function () { c.classList.remove('sobre'); });
+    c.addEventListener('drop', function (ev) {
+      ev.preventDefault(); c.classList.remove('sobre');
+      try { var d = JSON.parse(ev.dataTransfer.getData('text/plain')); estado.ativo = a; adicionar(a, d.tipo, d.codigo); } catch (e) { /* ignora */ }
+    });
+    var nome = el('input', { class: 'nome', value: a.nome, maxlength: '120', 'aria-label': 'Nome do arranjo' });
+    nome.disabled = travado;
+    nome.addEventListener('input', function () { a.nome = nome.value; agendar(a); });
+    var desc = el('textarea', { placeholder: 'Descrição curta (opcional)', maxlength: '1000', 'aria-label': 'Descrição' });
+    desc.value = a.descricao || ''; desc.disabled = travado;
+    desc.addEventListener('input', function () { a.descricao = desc.value; agendar(a); });
+    var psh = el('input', { type: 'checkbox' }); psh.checked = !!a.psh; psh.disabled = travado;
+    psh.addEventListener('change', function () { a.psh = psh.checked; agendar(a); });
+    c.appendChild(el('div', { class: 'topo' }, [nome]));
+    c.appendChild(desc);
+    c.appendChild(el('label', { class: 'psh' }, [psh, 'Integra o Programa Segurança Hídrica (PSH) — detalhamento futuro']));
+    ORDEM.forEach(function (t) { c.appendChild(zona(a, t, travado)); });
+    var rod = el('div', { class: 'rodape-card' }, [el('span', { 'data-status': a.id || a._tmp, text: a.atualizado_em ? 'Salvo' : '' })]);
+    if (!travado) rod.appendChild(el('button', { text: 'Excluir arranjo', onclick: function (ev) { ev.stopPropagation(); excluir(a); } }));
+    c.appendChild(rod);
+    return c;
+  }
+
+  function zona(a, tipo, travado) {
+    var cod = a.itens[tipo];
+    var tit = el('div', { class: 'titulo' }, [el('span', { text: ROTULOS[tipo] + (cod.length ? ' (' + cod.length + ')' : '') })]);
+    if (tipo === 'municipio' && !travado) {
+      tit.appendChild(el('button', { text: 'todos', title: 'Incluir todos os municípios da regional', onclick: function (ev) {
+        ev.stopPropagation();
+        catalogo('municipio').forEach(function (m) { if (cod.indexOf(m.codigo) < 0) cod.push(m.codigo); });
+        alterou(a);
+      } }));
+    }
+    var chips = el('div', { class: 'chips' });
+    cod.forEach(function (codigo) {
+      var item = catalogo(tipo).filter(function (i) { return i.codigo === codigo; })[0] || {};
+      var ch = el('span', { class: 'chip t-' + tipo + (item.tipo ? ' ' + item.tipo : '') }, [nomeDe(tipo, codigo)]);
+      if (!travado) ch.appendChild(el('button', { 'aria-label': 'Remover', text: '×', onclick: function (ev) {
+        ev.stopPropagation(); cod.splice(cod.indexOf(codigo), 1); alterou(a);
+      } }));
+      chips.appendChild(ch);
+    });
+    var z = el('div', { class: 'zona' }, [tit, cod.length ? chips : el('div', { class: 'vazia', text: 'Arraste ' + ROTULOS[tipo].toLowerCase() + ' aqui' })]);
+    return z;
+  }
+
+  function marcarAtivo() {
+    var cards = document.querySelectorAll('.arranjo');
+    estado.dados.arranjos.forEach(function (a, i) { if (cards[i]) cards[i].classList.toggle('ativo', a === estado.ativo); });
+  }
+
+  function adicionar(a, tipo, codigo) {
+    if (bloqueado()) return;
+    if (a.itens[tipo].indexOf(codigo) >= 0) return;
+    a.itens[tipo].push(codigo);
+    alterou(a);
+  }
+
+  function alterou(a) { desenharGrade(); desenharPaleta(); desenharEstado(); agendar(a); }
+
+  // ---------- salvamento ----------
+  function agendar(a) {
+    var chave = a.id || a._tmp;
+    clearTimeout(estado.timers[chave]);
+    sinal('Alterações não salvas…');
+    estado.timers[chave] = setTimeout(function () { salvar(a); }, 1200);
+  }
+
+  function salvar(a) {
+    if (!String(a.nome || '').trim()) { sinal('Dê um nome ao arranjo para salvar.'); return; }
+    if (a._salvando) { a._denovo = true; return; }
+    a._salvando = true; estado.pendentes++; sinal('Salvando…');
+    var envio = { id: a.id || '', nome: a.nome, descricao: a.descricao, psh: !!a.psh, itens: a.itens };
+    api('salvarArranjo', estado.token, envio).then(function (r) {
+      a.id = r.id; a.atualizado_em = r.atualizado_em;
+      var s = document.querySelector('[data-status="' + a.id + '"]') || (a._tmp && document.querySelector('[data-status="' + a._tmp + '"]'));
+      if (s) { s.textContent = 'Salvo'; s.setAttribute('data-status', a.id); }
+    }).catch(function (e) { erroSessao(e); sinal('Erro ao salvar: ' + e.message); })
+      .then(function () {
+        a._salvando = false; estado.pendentes--;
+        if (a._denovo) { a._denovo = false; salvar(a); }
+        else if (!estado.pendentes) sinal('Tudo salvo');
+      });
+  }
+
+  function novo() {
+    var a = { id: '', _tmp: 'tmp' + Date.now(), nome: 'Novo arranjo', descricao: '', psh: false, itens: { projeto: [], publico: [], municipio: [], tecnico: [] } };
+    estado.dados.arranjos.unshift(a);
+    estado.ativo = a;
+    desenharTudo();
+    salvar(a);
+    var campo = document.querySelector('.arranjo input.nome');
+    if (campo) { campo.focus(); campo.select(); }
+  }
+
+  function excluir(a) {
+    if (!confirm('Excluir o arranjo “' + a.nome + '”?')) return;
+    var remover = function () {
+      estado.dados.arranjos.splice(estado.dados.arranjos.indexOf(a), 1);
+      if (estado.ativo === a) estado.ativo = null;
+      desenharTudo();
+    };
+    if (!a.id) { remover(); return; }
+    api('excluirArranjo', estado.token, a.id).then(function () { remover(); sinal('Arranjo excluído'); }).catch(erroSessao);
+  }
+
+  function concluir() {
+    var d = estado.dados, alvo = !d.concluido;
+    if (alvo && conferir(true) > 0 && !confirm('A conferência aponta arranjos incompletos. Marcar como concluída assim mesmo?')) return;
+    api('marcarConcluido', estado.token, alvo).then(function (v) { d.concluido = v; desenharEstado(); }).catch(erroSessao);
+  }
+
+  // ---------- conferência ----------
+  function conferir(soContar) {
+    var d = estado.dados, usoMun = usos('municipio'), usoTec = usos('tecnico');
+    var incompletos = d.arranjos.filter(function (a) { return !a.itens.projeto.length || !a.itens.municipio.length || !a.itens.tecnico.length; });
+    if (soContar) return incompletos.length;
+    var semMun = catalogo('municipio').filter(function (m) { return !usoMun[m.codigo]; });
+    var semTec = catalogo('tecnico').filter(function (t) { return !usoTec[t.codigo]; });
+    var repetidos = catalogo('tecnico').filter(function (t) { return usoTec[t.codigo] > 1; });
+    var corpo = $('corpoConferencia'); corpo.innerHTML = '';
+    function secao(titulo, itens, fmt, vazio) {
+      corpo.appendChild(el('h4', { text: titulo + ' (' + itens.length + ')' }));
+      corpo.appendChild(itens.length ? el('div', { class: 'chips' }, itens.map(fmt)) : el('div', { class: 'ok', text: vazio }));
+    }
+    secao('Arranjos incompletos (sem projeto, município ou equipe)', incompletos, function (a) {
+      var falta = ['projeto', 'municipio', 'tecnico'].filter(function (t) { return !a.itens[t].length; }).map(function (t) { return ROTULOS[t].toLowerCase(); });
+      return el('span', { class: 'chip', text: a.nome + ' — falta: ' + falta.join(', ') });
+    }, 'Todos os arranjos têm projeto, municípios e equipe.');
+    secao('Municípios da regional sem nenhum arranjo', semMun, function (m) { return el('span', { class: 'chip t-municipio', text: m.nome }); }, 'Todos os municípios estão em algum arranjo.');
+    secao('Técnicos sem arranjo', semTec, function (t) { return el('span', { class: 'chip t-tecnico', text: t.nome }); }, 'Todos os técnicos estão em algum arranjo.');
+    secao('Técnicos em mais de um arranjo (informativo: o peso será definido depois pelas UPFs)', repetidos, function (t) {
+      return el('span', { class: 'chip t-tecnico', text: t.nome + ' · ' + usoTec[t.codigo] + ' arranjos' });
+    }, 'Nenhum técnico repetido.');
+    $('dlgConferencia').showModal();
+  }
+
+  // ---------- painel ASPLAN ----------
+  function carregarPainel() {
+    sinal('Carregando…');
+    api('carregarPainel', estado.token).then(function (p) { sinal(''); mostrar('telaPainel'); desenharPainel(p); }).catch(erroSessao);
+  }
+
+  function desenharPainel(p) {
+    var t = $('telaPainel'); t.innerHTML = '';
+    var r = p.resumo, soma = function (k) { return r.reduce(function (s, x) { return s + x[k]; }, 0); };
+    var barra = el('div', { class: 'barra' }, [
+      el('button', { class: 'primario', text: 'Exportar planilha (CSV)', onclick: exportar }),
+      el('button', { text: p.estado.aceitando ? 'Encerrar prazo (bloquear alterações)' : 'Reabrir prazo', onclick: function () {
+        var alvo = !p.estado.aceitando;
+        if (!confirm(alvo ? 'Reabrir as alterações para todas as regionais?' : 'Encerrar o prazo? As regionais não poderão mais alterar os arranjos.')) return;
+        api('definirAceite', estado.token, alvo).then(carregarPainel).catch(erroSessao);
+      } }),
+      el('button', { text: 'Atualizar', onclick: carregarPainel }),
+      el('span', { class: 'estado', text: p.estado.aceitando ? 'Recebendo alterações' : 'Prazo encerrado' })
+    ]);
+    t.appendChild(barra);
+    var kpis = el('div', { class: 'kpis' });
+    [[soma('arranjos'), 'arranjos montados'],
+     [r.filter(function (x) { return x.arranjos > 0; }).length + ' / ' + r.length, 'regionais com arranjos'],
+     [r.filter(function (x) { return x.concluido; }).length + ' / ' + r.length, 'regionais concluídas'],
+     [soma('municipios_cobertos') + ' / ' + soma('municipios_total'), 'municípios cobertos'],
+     [soma('tecnicos_alocados') + ' / ' + soma('tecnicos_total'), 'técnicos em algum arranjo'],
+     [soma('tecnicos_repetidos'), 'técnicos em mais de um arranjo']
+    ].forEach(function (k) { kpis.appendChild(el('div', { class: 'kpi' }, [el('b', { text: String(k[0]) }), el('span', { text: k[1] })])); });
+    t.appendChild(kpis);
+
+    var tab = el('table');
+    tab.appendChild(el('tr', {}, ['Regional', 'Arranjos', 'Municípios cobertos', 'Técnicos alocados', 'Técnicos repetidos', 'Situação'].map(function (h, i) {
+      return el('th', { class: i ? 'num' : '', text: h });
+    })));
+    r.forEach(function (x) {
+      tab.appendChild(el('tr', {}, [
+        el('td', { text: x.regional }), el('td', { class: 'num', text: String(x.arranjos) }),
+        el('td', { class: 'num', text: x.municipios_cobertos + ' / ' + x.municipios_total }),
+        el('td', { class: 'num', text: x.tecnicos_alocados + ' / ' + x.tecnicos_total }),
+        el('td', { class: 'num', text: String(x.tecnicos_repetidos) }),
+        el('td', { class: 'num', text: x.concluido ? 'Concluída' : (x.arranjos ? 'Em montagem' : 'Não iniciada') })
+      ]));
+    });
+    t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: 'Situação por regional' }), tab]));
+
+    var max = Math.max.apply(null, p.uso_projetos.map(function (u) { return u.arranjos; }).concat([1]));
+    var tu = el('table');
+    tu.appendChild(el('tr', {}, [el('th', { text: 'Projeto' }), el('th', { text: 'Tipo' }), el('th', { class: 'num', text: 'Arranjos' }), el('th', { text: '' })]));
+    p.uso_projetos.slice().sort(function (a, b) { return b.arranjos - a.arranjos; }).forEach(function (u) {
+      var b = el('div', { class: 'barra-h' }); b.style.width = (u.arranjos / max * 100) + '%';
+      tu.appendChild(el('tr', {}, [el('td', { text: u.nome }), el('td', { text: u.tipo }), el('td', { class: 'num', text: String(u.arranjos) }), el('td', { style: 'width:40%' }, [b])]));
+    });
+    t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: 'Projetos usados nos arranjos' }), tu]));
+
+    var ta = el('table');
+    ta.appendChild(el('tr', {}, ['Regional', 'Arranjo', 'Projetos', 'Público', 'Municípios', 'Técnicos', 'PSH'].map(function (h) { return el('th', { text: h }); })));
+    p.arranjos.forEach(function (a) {
+      ta.appendChild(el('tr', {}, [
+        el('td', { text: a.regional }), el('td', { text: a.nome }),
+        el('td', { text: a.projetos.join(', ') }), el('td', { text: a.publicos.join(', ') }),
+        el('td', { text: a.municipios.length + ': ' + a.municipios.join(', ') }),
+        el('td', { class: 'num', text: String(a.tecnicos) }), el('td', { text: a.psh ? 'sim' : '' })
+      ]));
+    });
+    t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: 'Todos os arranjos (' + p.arranjos.length + ')' }), ta]));
+  }
+
+  function exportar() {
+    api('exportarArranjos', estado.token).then(function (linhas) {
+      var csv = linhas.map(function (l) { return l.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(';'); }).join('\r\n');
+      var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+      var a = el('a', { href: URL.createObjectURL(blob), download: 'arranjos-regionais-2027.csv' });
+      document.body.appendChild(a); a.click(); a.remove();
+    }).catch(erroSessao);
+  }
+
+  // ---------- eventos ----------
+  $('btnEntrar').addEventListener('click', entrar);
+  $('inpCodigo').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') entrar(); });
+  $('btnSair').addEventListener('click', sair);
+  $('btnNovo').addEventListener('click', novo);
+  $('btnConferir').addEventListener('click', function () { conferir(false); });
+  $('btnFecharConf').addEventListener('click', function () { $('dlgConferencia').close(); });
+  $('btnConcluir').addEventListener('click', concluir);
+  $('inpBusca').addEventListener('input', function (ev) { estado.busca = ev.target.value; desenharPaleta(); });
+  Array.prototype.forEach.call(document.querySelectorAll('.abas button'), function (b) {
+    b.addEventListener('click', function () {
+      estado.aba = b.getAttribute('data-aba');
+      Array.prototype.forEach.call(document.querySelectorAll('.abas button'), function (x) { x.classList.toggle('ativa', x === b); });
+      desenharPaleta();
+    });
+  });
+  window.addEventListener('beforeunload', function (ev) { if (estado.pendentes) { ev.preventDefault(); ev.returnValue = ''; } });
+
+  // Prévia local: fora do Apps Script, carrega a simulação de dev/.
+  if (!window.API_URL && !(window.google && google.script)) {
+    var s1 = document.createElement('script'); s1.src = '../dev/mock-catalogos.js';
+    s1.onload = function () { var s2 = document.createElement('script'); s2.src = '../dev/mock.js'; s2.onload = iniciar; document.body.appendChild(s2); };
+    s1.onerror = function () { $('erroEntrada').textContent = 'Backend indisponível.'; };
+    document.body.appendChild(s1);
+  } else {
+    iniciar();
+  }
+})();
+</script>
+</body>
+</html>
