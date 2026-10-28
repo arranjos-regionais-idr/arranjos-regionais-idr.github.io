@@ -181,7 +181,12 @@
   'use strict';
 
   var ROTULOS = { projeto: 'Projetos', publico: 'Público', municipio: 'Municípios', tecnico: 'Equipe' };
-  var ORDEM = ['projeto', 'publico', 'municipio', 'tecnico'];
+  // Zonas do cartão: os projetos aparecem separados em cadeias e transversais, como na paleta.
+  var ZONAS_CARTAO = [
+    { tipo: 'projeto', filtro: 'cadeia', rotulo: 'Cadeias Produtivas', vazia: 'Arraste cadeias produtivas aqui' },
+    { tipo: 'projeto', filtro: 'transversal', rotulo: 'Áreas Transversais', vazia: 'Arraste áreas transversais aqui' },
+    { tipo: 'publico' }, { tipo: 'municipio' }, { tipo: 'tecnico' }
+  ];
   // As duas primeiras abas da paleta mostram projetos, separados pela marca cadeia/transversal.
   var ABAS_PALETA = {
     cadeia: { tipo: 'projeto', filtro: 'cadeia', rotulo: 'Cadeias Produtivas' },
@@ -302,6 +307,10 @@
     var c = estado.dados.catalogos;
     return { projeto: c.projetos, publico: c.publicos, municipio: c.municipios, tecnico: c.equipe }[tipo];
   }
+  function itemDe(tipo, codigo) {
+    return catalogo(tipo).filter(function (i) { return i.codigo === codigo; })[0] || {};
+  }
+
   function nomeDe(tipo, codigo) {
     var item = catalogo(tipo).filter(function (i) { return i.codigo === codigo; })[0];
     return item ? item.nome : codigo;
@@ -425,16 +434,18 @@
     c.appendChild(el('div', { class: 'topo' }, [nome]));
     c.appendChild(desc);
     c.appendChild(el('label', { class: 'psh' }, [psh, 'Integra o Programa Segurança Hídrica (PSH) — detalhamento futuro']));
-    ORDEM.forEach(function (t) { c.appendChild(zona(a, t, travado)); });
+    ZONAS_CARTAO.forEach(function (z) { c.appendChild(zona(a, z, travado)); });
     var rod = el('div', { class: 'rodape-card' }, [el('span', { 'data-status': a.id || a._tmp, text: a.atualizado_em ? 'Salvo' : '' })]);
     if (!travado) rod.appendChild(el('button', { text: 'Excluir arranjo', onclick: function (ev) { ev.stopPropagation(); excluir(a); } }));
     c.appendChild(rod);
     return c;
   }
 
-  function zona(a, tipo, travado) {
-    var cod = a.itens[tipo];
-    var tit = el('div', { class: 'titulo' }, [el('span', { text: ROTULOS[tipo] + (cod.length ? ' (' + cod.length + ')' : '') })]);
+  function zona(a, spec, travado) {
+    var tipo = spec.tipo, cod = a.itens[tipo];
+    var visiveis = spec.filtro ? cod.filter(function (c) { return (itemDe(tipo, c).tipo || 'cadeia') === spec.filtro; }) : cod;
+    var rotulo = spec.rotulo || ROTULOS[tipo];
+    var tit = el('div', { class: 'titulo' }, [el('span', { text: rotulo + (visiveis.length ? ' (' + visiveis.length + ')' : '') })]);
     if (tipo === 'municipio' && !travado) {
       tit.appendChild(el('button', { text: 'todos', title: 'Incluir todos os municípios da regional', onclick: function (ev) {
         ev.stopPropagation();
@@ -443,8 +454,8 @@
       } }));
     }
     var chips = el('div', { class: 'chips' });
-    cod.forEach(function (codigo) {
-      var item = catalogo(tipo).filter(function (i) { return i.codigo === codigo; })[0] || {};
+    visiveis.forEach(function (codigo) {
+      var item = itemDe(tipo, codigo);
       var deFora = tipo === 'tecnico' && item.codigo && !daMinhaRegional(item);
       var ch = el('span', { class: 'chip t-' + tipo + (item.tipo ? ' ' + item.tipo : '') + (deFora ? ' fora' : ''),
         title: tipo === 'tecnico' ? detalheTecnico(item) : '' }, [nomeDe(tipo, codigo)]);
@@ -453,7 +464,7 @@
       } }));
       chips.appendChild(ch);
     });
-    var z = el('div', { class: 'zona' }, [tit, cod.length ? chips : el('div', { class: 'vazia', text: 'Arraste ' + ROTULOS[tipo].toLowerCase() + ' aqui' })]);
+    var z = el('div', { class: 'zona' }, [tit, visiveis.length ? chips : el('div', { class: 'vazia', text: spec.vazia || 'Arraste ' + rotulo.toLowerCase() + ' aqui' })]);
     return z;
   }
 
