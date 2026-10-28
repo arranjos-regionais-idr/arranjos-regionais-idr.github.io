@@ -182,7 +182,7 @@
 (function () {
   'use strict';
 
-  var ROTULOS = { projeto: 'Projetos', publico: 'Público', municipio: 'Municípios', tecnico: 'Equipe' };
+  var ROTULOS = { projeto: 'Cadeias Produtivas ou Áreas Transversais', publico: 'Público', municipio: 'Municípios', tecnico: 'Equipe' };
   // Zonas do cartão: os projetos aparecem separados em cadeias e transversais, como na paleta.
   var ZONAS_CARTAO = [
     { tipo: 'projeto', filtro: 'cadeia', rotulo: 'Cadeias Produtivas', vazia: 'Arraste cadeias produtivas aqui' },
@@ -409,7 +409,7 @@
     if (!estado.dados.arranjos.length) {
       g.appendChild(el('div', { class: 'vazio-geral' }, [
         el('p', { text: 'Nenhum arranjo ainda.' }),
-        el('p', { text: 'Clique em “+ Novo arranjo”, dê um nome (ex.: Mulheres do Café) e arraste projetos, público, municípios e equipe.' })
+        el('p', { text: 'Clique em “+ Novo arranjo”, dê um nome (ex.: Mulheres do Café) e arraste cadeias produtivas, áreas transversais, público, municípios e equipe.' })
       ]));
       return;
     }
@@ -550,10 +550,10 @@
       corpo.appendChild(el('h4', { text: titulo + ' (' + itens.length + ')' }));
       corpo.appendChild(itens.length ? el('div', { class: 'chips' }, itens.map(fmt)) : el('div', { class: 'ok', text: vazio }));
     }
-    secao('Arranjos incompletos (sem projeto, município ou equipe)', incompletos, function (a) {
+    secao('Arranjos incompletos (sem cadeia ou área transversal, município ou equipe)', incompletos, function (a) {
       var falta = ['projeto', 'municipio', 'tecnico'].filter(function (t) { return !a.itens[t].length; }).map(function (t) { return ROTULOS[t].toLowerCase(); });
       return el('span', { class: 'chip', text: a.nome + ' — falta: ' + falta.join(', ') });
-    }, 'Todos os arranjos têm projeto, municípios e equipe.');
+    }, 'Todos os arranjos têm cadeia ou área transversal, municípios e equipe.');
     secao('Municípios da regional sem nenhum arranjo', semMun, function (m) { return el('span', { class: 'chip t-municipio', text: m.nome }); }, 'Todos os municípios estão em algum arranjo.');
     secao('Técnicos da regional sem arranjo', semTec, function (t) { return el('span', { class: 'chip t-tecnico', text: t.nome }); }, 'Todos os técnicos estão em algum arranjo.');
     secao('Técnicos em mais de um arranjo (informativo: o peso será definido depois pelas UPFs)', repetidos, function (t) {
@@ -608,20 +608,25 @@
     t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: 'Situação por regional' }), tab]));
 
     var max = Math.max.apply(null, p.uso_projetos.map(function (u) { return u.arranjos; }).concat([1]));
-    var tu = el('table');
-    tu.appendChild(el('tr', {}, [el('th', { text: 'Projeto' }), el('th', { text: 'Tipo' }), el('th', { class: 'num', text: 'Arranjos' }), el('th', { text: '' })]));
-    p.uso_projetos.slice().sort(function (a, b) { return b.arranjos - a.arranjos; }).forEach(function (u) {
-      var b = el('div', { class: 'barra-h' }); b.style.width = (u.arranjos / max * 100) + '%';
-      tu.appendChild(el('tr', {}, [el('td', { text: u.nome }), el('td', { text: u.tipo }), el('td', { class: 'num', text: String(u.arranjos) }), el('td', { style: 'width:40%' }, [b])]));
+    // Uso no estado, uma tabela para cadeias produtivas e outra para áreas transversais.
+    [['cadeia', 'Cadeia Produtiva', 'Cadeias Produtivas usadas nos arranjos'],
+     ['transversal', 'Área Transversal', 'Áreas Transversais usadas nos arranjos']].forEach(function (g) {
+      var tu = el('table');
+      tu.appendChild(el('tr', {}, [el('th', { text: g[1] }), el('th', { class: 'num', text: 'Arranjos' }), el('th', { text: '' })]));
+      p.uso_projetos.filter(function (u) { return u.tipo === g[0]; }).sort(function (a, b) { return b.arranjos - a.arranjos; }).forEach(function (u) {
+        var b = el('div', { class: 'barra-h' }); b.style.width = (u.arranjos / max * 100) + '%';
+        tu.appendChild(el('tr', {}, [el('td', { text: u.nome }), el('td', { class: 'num', text: String(u.arranjos) }), el('td', { style: 'width:40%' }, [b])]));
+      });
+      t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: g[2] }), tu]));
     });
-    t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: 'Projetos usados nos arranjos' }), tu]));
 
     var ta = el('table');
-    ta.appendChild(el('tr', {}, ['Regional', 'Arranjo', 'Projetos', 'Público', 'Municípios', 'Técnicos', 'PSH'].map(function (h) { return el('th', { text: h }); })));
+    ta.appendChild(el('tr', {}, ['Regional', 'Arranjo', 'Cadeias Produtivas', 'Áreas Transversais', 'Público', 'Municípios', 'Técnicos', 'PSH'].map(function (h) { return el('th', { text: h }); })));
     p.arranjos.forEach(function (a) {
       ta.appendChild(el('tr', {}, [
         el('td', { text: a.regional }), el('td', { text: a.nome }),
-        el('td', { text: a.projetos.join(', ') }), el('td', { text: a.publicos.join(', ') }),
+        el('td', { text: (a.cadeias || []).join(', ') }), el('td', { text: (a.transversais || []).join(', ') }),
+        el('td', { text: a.publicos.join(', ') }),
         el('td', { text: a.municipios.length + ': ' + a.municipios.join(', ') }),
         el('td', { class: 'num', text: String(a.tecnicos) }), el('td', { text: a.psh ? 'sim' : '' })
       ]));
