@@ -41,8 +41,8 @@
   #telaMontagem { display: grid; grid-template-columns: 320px 1fr; height: calc(100vh - 50px); }
   #telaMontagem.com-aviso { height: calc(100vh - 88px); }
   aside { background: var(--branco); border-right: 1px solid var(--borda); display: flex; flex-direction: column; min-height: 0; }
-  .abas { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--borda); }
-  .abas button { border: 0; border-radius: 0; padding: 10px 4px; background: transparent; border-bottom: 3px solid transparent; font-size: 13px; }
+  .abas { display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 1px solid var(--borda); }
+  .abas button { border: 0; border-radius: 0; padding: 8px 2px; background: transparent; border-bottom: 3px solid transparent; font-size: 12px; line-height: 1.2; }
   .abas button.ativa { border-bottom-color: var(--verde); font-weight: 600; }
   .busca { padding: 8px; border-bottom: 1px solid var(--borda); }
   .busca input { width: 100%; padding: 7px 8px; border: 1px solid var(--borda); border-radius: 6px; }
@@ -143,7 +143,8 @@
 <section id="telaMontagem" class="oculto">
   <aside>
     <div class="abas" role="tablist">
-      <button data-aba="projeto" class="ativa">Projetos</button>
+      <button data-aba="cadeia" class="ativa">Cadeias Produtivas</button>
+      <button data-aba="transversal">Áreas Transversais</button>
       <button data-aba="publico">Público</button>
       <button data-aba="municipio">Municípios</button>
       <button data-aba="tecnico">Equipe</button>
@@ -176,7 +177,13 @@
 
   var ROTULOS = { projeto: 'Projetos', publico: 'Público', municipio: 'Municípios', tecnico: 'Equipe' };
   var ORDEM = ['projeto', 'publico', 'municipio', 'tecnico'];
-  var estado = { token: null, perfil: null, regional: null, dados: null, ativo: null, aba: 'projeto', busca: '', timers: {}, pendentes: 0 };
+  // As duas primeiras abas da paleta mostram projetos, separados pela marca cadeia/transversal.
+  var ABAS_PALETA = {
+    cadeia: { tipo: 'projeto', filtro: 'cadeia', rotulo: 'Cadeias Produtivas' },
+    transversal: { tipo: 'projeto', filtro: 'transversal', rotulo: 'Áreas Transversais' },
+    publico: { tipo: 'publico' }, municipio: { tipo: 'municipio' }, tecnico: { tipo: 'tecnico' }
+  };
+  var estado = { token: null, perfil: null, regional: null, dados: null, ativo: null, aba: 'cadeia', busca: '', timers: {}, pendentes: 0 };
 
   // ---------- chamada ao backend (Apps Script ou simulação local) ----------
   function api(fn) {
@@ -303,19 +310,13 @@
   // ---------- paleta ----------
   function desenharPaleta() {
     var p = $('paleta'); p.innerHTML = '';
-    var tipo = estado.aba, termo = normal(estado.busca), uso = usos(tipo);
+    var aba = ABAS_PALETA[estado.aba], tipo = aba.tipo, termo = normal(estado.busca), uso = usos(tipo);
     var lista = catalogo(tipo).filter(function (i) {
-      return !termo || normal(i.nome + ' ' + (i.formacao || '') + ' ' + (i.municipio || '')).indexOf(termo) >= 0;
+      return (!aba.filtro || i.tipo === aba.filtro)
+        && (!termo || normal(i.nome + ' ' + (i.formacao || '') + ' ' + (i.municipio || '')).indexOf(termo) >= 0);
     });
-    if (tipo === 'projeto') {
-      [['cadeia', 'Cadeias produtivas'], ['transversal', 'Áreas transversais']].forEach(function (g) {
-        var sub = lista.filter(function (i) { return i.tipo === g[0]; });
-        if (sub.length) { p.appendChild(el('h4', { text: g[1] + ' (' + sub.length + ')' })); sub.forEach(function (i) { p.appendChild(peca(tipo, i, uso)); }); }
-      });
-    } else {
-      p.appendChild(el('h4', { text: ROTULOS[tipo] + ' (' + lista.length + ')' }));
-      lista.forEach(function (i) { p.appendChild(peca(tipo, i, uso)); });
-    }
+    p.appendChild(el('h4', { text: (aba.rotulo || ROTULOS[tipo]) + ' (' + lista.length + ')' }));
+    lista.forEach(function (i) { p.appendChild(peca(tipo, i, uso)); });
     if (!lista.length) p.appendChild(el('div', { class: 'dica', text: 'Nada encontrado.' }));
   }
 
