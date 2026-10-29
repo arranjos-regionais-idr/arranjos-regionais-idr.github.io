@@ -702,15 +702,33 @@
       t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: g[2] }), tu]));
     });
 
+    // Metas (PPA, ODS e outras): quantos arranjos e quantas regionais atendem cada uma.
+    var rank = function (f) { var i = ORDEM_FONTES.indexOf(f); return i < 0 ? ORDEM_FONTES.length : i; };
+    var usoMetas = (p.uso_metas || []).slice().sort(function (x, y) {
+      return rank(x.fonte) - rank(y.fonte) || x.fonte.localeCompare(y.fonte) || y.arranjos - x.arranjos;
+    });
+    if (usoMetas.length) {
+      var maxM = Math.max.apply(null, usoMetas.map(function (u) { return u.arranjos; }).concat([1]));
+      var tm = el('table');
+      tm.appendChild(el('tr', {}, [el('th', { text: 'Fonte' }), el('th', { text: 'Meta' }), el('th', { class: 'num', text: 'Arranjos' }), el('th', { class: 'num', text: 'Regionais' }), el('th', { text: '' })]));
+      usoMetas.forEach(function (u) {
+        var b = el('div', { class: 'barra-h' }); b.style.width = (u.arranjos / maxM * 100) + '%';
+        tm.appendChild(el('tr', {}, [el('td', { text: u.fonte }), el('td', { text: u.titulo }), el('td', { class: 'num', text: String(u.arranjos) }),
+          el('td', { class: 'num', text: u.regionais + ' / ' + p.resumo.length }), el('td', { style: 'width:30%' }, [b])]));
+      });
+      t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: 'Metas atendidas pelos arranjos' }), tm]));
+    }
+
     var ta = el('table');
-    ta.appendChild(el('tr', {}, ['Regional', 'Arranjo', 'Cadeias Produtivas', 'Áreas Transversais', 'Público', 'Municípios', 'Técnicos', 'PSH'].map(function (h) { return el('th', { text: h }); })));
+    ta.appendChild(el('tr', {}, ['Regional', 'Arranjo', 'Cadeias Produtivas', 'Áreas Transversais', 'Público', 'Municípios', 'Técnicos', 'PSH', 'Metas atendidas'].map(function (h) { return el('th', { text: h }); })));
     p.arranjos.forEach(function (a) {
       ta.appendChild(el('tr', {}, [
         el('td', { text: a.regional }), el('td', { text: a.nome }),
         el('td', { text: (a.cadeias || []).join(', ') }), el('td', { text: (a.transversais || []).join(', ') }),
         el('td', { text: a.publicos.join(', ') }),
         el('td', { text: a.municipios.length + ': ' + a.municipios.join(', ') }),
-        el('td', { class: 'num', text: String(a.tecnicos) }), el('td', { text: a.psh ? 'sim' : '' })
+        el('td', { class: 'num', text: String(a.tecnicos) }), el('td', { text: a.psh ? 'sim' : '' }),
+        el('td', { text: (a.metas || []).map(function (m) { return m.fonte + ' · ' + m.titulo; }).join('; ') })
       ]));
     });
     t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: 'Todos os arranjos (' + p.arranjos.length + ')' }), ta]));
