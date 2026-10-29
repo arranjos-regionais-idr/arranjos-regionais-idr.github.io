@@ -113,6 +113,23 @@
   .bloco h3 { margin: 0 0 8px; font-size: 15px; }
   .barra-h { height: 10px; background: var(--verde-2); border-radius: 5px; }
 
+  /* Caixa de metas atendidas pelo arranjo ativo */
+  #caixaMetas { position: fixed; right: 16px; bottom: 16px; width: 340px; max-width: calc(100vw - 32px); max-height: 46vh;
+    display: flex; flex-direction: column; background: var(--branco); border: 1px solid var(--borda); border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.18); z-index: 20; font-size: 13px; }
+  #caixaMetas .cab { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--verde); color: #fff; border-radius: 10px 10px 0 0; cursor: pointer; }
+  #caixaMetas .cab b { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #caixaMetas .cab button { background: transparent; color: #fff; border-color: rgba(255,255,255,.5); padding: 0 8px; }
+  #caixaMetas.fechada .corpo { display: none; }
+  #caixaMetas.fechada .cab { border-radius: 10px; }
+  #caixaMetas .corpo { overflow: auto; padding: 6px 10px 10px; }
+  #caixaMetas h5 { margin: 8px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--suave); }
+  #caixaMetas .meta { padding: 5px 0; border-bottom: 1px solid var(--borda); }
+  #caixaMetas .meta:last-child { border-bottom: 0; }
+  #caixaMetas .meta small { display: block; color: var(--suave); }
+  #caixaMetas .vazio { color: var(--suave); padding: 6px 0; }
+  #telaMontagem.com-metas .grade { padding-bottom: 46vh; }
+
   @media (max-width: 800px) {
     #telaMontagem { grid-template-columns: 1fr; height: auto; }
     aside { max-height: 45vh; border-right: 0; border-bottom: 1px solid var(--borda); }
@@ -171,6 +188,10 @@
       <span class="estado" id="estadoRegional"></span>
     </div>
     <div class="grade" id="grade"></div>
+    <div id="caixaMetas" class="oculto" aria-live="polite">
+      <div class="cab" id="cabMetas"><b id="tituloMetas">Metas atendidas</b><button id="btnMetas" aria-label="Recolher ou abrir a caixa de metas">–</button></div>
+      <div class="corpo" id="corpoMetas"></div>
+    </div>
   </main>
 </section>
 
@@ -398,7 +419,64 @@
   }
 
   // ---------- quadro de arranjos ----------
-  function desenharTudo() { desenharPaleta(); desenharGrade(); desenharEstado(); }
+  function desenharTudo() { desenharPaleta(); desenharGrade(); desenharEstado(); desenharMetas(); }
+
+  // Metas (PPA, ODS e outras cadastradas na planilha) que o arranjo atende, com o motivo de cada uma.
+  // Regras em Metas.gs: a meta vale se qualquer vínculo casar com um item do arranjo.
+  var ORDEM_FONTES = ['PPA', 'ODS'];
+  function metasDoArranjo(a) {
+    var temBase = a.itens.projeto.length && a.itens.municipio.length;
+    return (estado.dados.catalogos.metas || []).map(function (m) {
+      var motivos = [];
+      var anotar = function (t) { if (motivos.indexOf(t) < 0) motivos.push(t); };
+      m.vinculos.forEach(function (v) {
+        var vale = function (c) { return v.codigo === '*' || v.codigo === c; };
+        if (v.tipo === 'qualquer' && temBase) anotar('arranjo com cadeia ou área e municípios');
+        else if (v.tipo === 'psh' && a.psh) anotar('integra o PSH');
+        else if (v.tipo === 'publico') a.itens.publico.forEach(function (c) { if (vale(c)) anotar(nomeDe('publico', c)); });
+        else if (['projeto', 'cadeia', 'transversal'].indexOf(v.tipo) >= 0) a.itens.projeto.forEach(function (c) {
+          var tipoItem = itemDe('projeto', c).tipo || 'cadeia';
+          if ((v.tipo === 'projeto' || v.tipo === tipoItem) && vale(c)) anotar(nomeDe('projeto', c));
+        });
+      });
+      return { meta: m, motivos: motivos };
+    }).filter(function (r) { return r.motivos.length; });
+  }
+
+  function desenharMetas() {
+    var caixa = $('caixaMetas'), corpo = $('corpoMetas');
+    var temMetas = estado.dados && (estado.dados.catalogos.metas || []).length;
+    caixa.classList.toggle('oculto', !temMetas);
+    caixa.classList.toggle('fechada', !!estado.metasFechada);
+    $('btnMetas').textContent = estado.metasFechada ? '+' : '–';
+    $('telaMontagem').classList.toggle('com-metas', !!temMetas && !estado.metasFechada);
+    if (!temMetas) return;
+    corpo.innerHTML = '';
+    var a = estado.ativo;
+    if (!a) {
+      $('tituloMetas').textContent = 'Metas atendidas';
+      corpo.appendChild(el('div', { class: 'vazio', text: 'Clique num arranjo para ver as metas do PPA, dos ODS e outras que ele atende.' }));
+      return;
+    }
+    var lista = metasDoArranjo(a);
+    $('tituloMetas').textContent = 'Metas atendidas (' + lista.length + ') · ' + (String(a.nome || '').trim() || 'sem nome');
+    if (!lista.length) {
+      corpo.appendChild(el('div', { class: 'vazio', text: 'Nenhuma ainda. Inclua cadeias produtivas, áreas transversais, público e municípios.' }));
+      return;
+    }
+    var fontes = {};
+    lista.forEach(function (r) { (fontes[r.meta.fonte] = fontes[r.meta.fonte] || []).push(r); });
+    var rank = function (f) { var i = ORDEM_FONTES.indexOf(f); return i < 0 ? ORDEM_FONTES.length : i; };
+    Object.keys(fontes).sort(function (x, y) { return rank(x) - rank(y) || x.localeCompare(y); }).forEach(function (f) {
+      corpo.appendChild(el('h5', { text: f + ' (' + fontes[f].length + ')' }));
+      fontes[f].forEach(function (r) {
+        corpo.appendChild(el('div', { class: 'meta', title: r.meta.detalhe || '' }, [
+          el('span', { text: r.meta.titulo }),
+          el('small', { text: 'por: ' + r.motivos.join(', ') })
+        ]));
+      });
+    });
+  }
 
   function desenharEstado() {
     var d = estado.dados;
@@ -431,12 +509,12 @@
     });
     var nome = el('input', { class: 'nome', value: a.nome, maxlength: '120', 'aria-label': 'Nome do arranjo' });
     nome.disabled = travado;
-    nome.addEventListener('input', function () { a.nome = nome.value; agendar(a); });
+    nome.addEventListener('input', function () { a.nome = nome.value; agendar(a); if (estado.ativo === a) desenharMetas(); });
     var desc = el('textarea', { placeholder: 'Descrição curta (opcional)', maxlength: '1000', 'aria-label': 'Descrição' });
     desc.value = a.descricao || ''; desc.disabled = travado;
     desc.addEventListener('input', function () { a.descricao = desc.value; agendar(a); });
     var psh = el('input', { type: 'checkbox' }); psh.checked = !!a.psh; psh.disabled = travado;
-    psh.addEventListener('change', function () { a.psh = psh.checked; agendar(a); });
+    psh.addEventListener('change', function () { a.psh = psh.checked; agendar(a); desenharMetas(); });
     c.appendChild(el('div', { class: 'topo' }, [nome]));
     c.appendChild(desc);
     c.appendChild(el('label', { class: 'psh' }, [psh, 'Integra o Programa Segurança Hídrica (PSH) — detalhamento futuro']));
@@ -477,6 +555,7 @@
   function marcarAtivo() {
     var cards = document.querySelectorAll('.arranjo');
     estado.dados.arranjos.forEach(function (a, i) { if (cards[i]) cards[i].classList.toggle('ativo', a === estado.ativo); });
+    desenharMetas();
   }
 
   function adicionar(a, tipo, codigo) {
@@ -486,7 +565,7 @@
     alterou(a);
   }
 
-  function alterou(a) { desenharGrade(); desenharPaleta(); desenharEstado(); agendar(a); }
+  function alterou(a) { desenharGrade(); desenharPaleta(); desenharEstado(); desenharMetas(); agendar(a); }
 
   // ---------- salvamento ----------
   function agendar(a) {
@@ -651,6 +730,7 @@
   $('inpCodigo').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') entrar(); });
   $('btnSair').addEventListener('click', sair);
   $('btnNovo').addEventListener('click', novo);
+  $('cabMetas').addEventListener('click', function () { estado.metasFechada = !estado.metasFechada; desenharMetas(); });
   $('btnConferir').addEventListener('click', function () { conferir(false); });
   $('btnFecharConf').addEventListener('click', function () { $('dlgConferencia').close(); });
   $('btnConcluir').addEventListener('click', concluir);
@@ -666,6 +746,7 @@
 
   // Prévia local: fora do Apps Script, carrega a simulação de dev/.
   if (!window.API_URL && !(window.google && google.script)) {
+    var s0 = document.createElement('script'); s0.src = 'Metas.gs'; document.body.appendChild(s0);
     var s1 = document.createElement('script'); s1.src = '../dev/mock-catalogos.js';
     s1.onload = function () { var s2 = document.createElement('script'); s2.src = '../dev/mock.js'; s2.onload = iniciar; document.body.appendChild(s2); };
     s1.onerror = function () { $('erroEntrada').textContent = 'Backend indisponível.'; };
