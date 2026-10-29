@@ -153,7 +153,7 @@
 <section id="telaEntrada">
   <div class="cartao-entrada">
     <h2>Montagem dos arranjos regionais</h2>
-    <p>Escolha a sua regional e informe o código recebido da ASPLAN.</p>
+    <p>Escolha a sua regional e informe o código recebido da DEPLAN.</p>
     <div class="campo">
       <label for="selRegional">Regional</label>
       <select id="selRegional"><option value="">Carregando…</option></select>
@@ -268,7 +268,7 @@
       sel.innerHTML = '';
       sel.appendChild(el('option', { value: '', text: 'Selecione…' }));
       lista.forEach(function (r) { sel.appendChild(el('option', { value: r, text: r })); });
-      sel.appendChild(el('option', { value: '__ASPLAN__', text: 'ASPLAN (painel estadual)' }));
+      sel.appendChild(el('option', { value: '__DEPLAN__', text: 'DEPLAN (painel estadual)' }));
     }).catch(function (e) { $('erroEntrada').textContent = e.message; });
     try {
       var salvo = JSON.parse(sessionStorage.getItem('arranjos_sessao') || 'null');
@@ -291,7 +291,7 @@
 
   function entrarCom(s) {
     estado.token = s.token; estado.perfil = s.perfil; estado.regional = s.regional;
-    if (s.perfil === 'asplan') { $('cabRegional').textContent = 'ASPLAN · painel estadual'; carregarPainel(); return; }
+    if (s.perfil === 'deplan') { $('cabRegional').textContent = 'DEPLAN · painel estadual'; carregarPainel(); return; }
     $('cabRegional').textContent = 'Regional ' + s.regional;
     sinal('Carregando…');
     api('carregarRegional', s.token).then(function (d) {
@@ -644,7 +644,7 @@
     $('dlgConferencia').showModal();
   }
 
-  // ---------- painel ASPLAN ----------
+  // ---------- painel DEPLAN ----------
   function carregarPainel() {
     sinal('Carregando…');
     api('carregarPainel', estado.token).then(function (p) { sinal(''); mostrar('telaPainel'); desenharPainel(p); }).catch(erroSessao);
