@@ -130,6 +130,46 @@
   #caixaMetas .vazio { color: var(--suave); padding: 6px 0; }
   #telaMontagem.com-metas .grade { padding-bottom: 46vh; }
 
+  /* Modo rio (front animado em pixel art). O botão "Visual" no cabeçalho volta ao clássico. */
+  body:not(.modo-rio) .so-rio { display: none !important; }
+  header { position: relative; z-index: 2; }
+  header .logo-px { width: 48px; height: 37px; image-rendering: pixelated; background: #fff; border-radius: 6px; padding: 2px; box-sizing: content-box; }
+  #fundoEntrada { position: fixed; left: 0; top: 0; z-index: 0; image-rendering: pixelated; }
+  .cartao-entrada { position: relative; z-index: 1; }
+  .modo-rio .cartao-entrada { border: 3px solid #1c1424; border-radius: 6px; box-shadow: 0 8px 0 rgba(28,20,36,.35); }
+  .logo-entrada { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .logo-entrada img { width: 96px; height: 74px; image-rendering: pixelated; }
+  .logo-entrada b { font-size: 24px; color: #44535f; }
+  .modo-rio #telaMontagem { grid-template-columns: 1fr; }
+  .modo-rio aside { display: none; }
+  .modo-rio aside.aberta { display: flex; max-height: 360px; margin-bottom: 12px; border: 3px solid #1c1424; border-radius: 6px; }
+  .modo-rio aside.aberta .paleta { display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
+  .modo-rio .paleta h4, .modo-rio .paleta details.grupo, .modo-rio .paleta .dica { flex-basis: 100%; }
+  .modo-rio .paleta > .peca { width: 250px; margin: 0; }
+  .modo-rio .abas { display: none; }
+  .cab-barraca { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #2a1d14; color: #ffe9b8; }
+  .cab-barraca b { flex: 1; }
+  .cab-barraca button { background: transparent; color: #ffe9b8; border-color: rgba(255,233,184,.5); }
+  .modo-rio .peca canvas { width: 48px; height: 48px; image-rendering: pixelated; flex: none; }
+  .modo-rio .peca canvas.eq { width: 24px; height: 26px; }
+  .peca .cor { width: 14px; height: 18px; flex: none; clip-path: polygon(0 0, 100% 0, 100% 60%, 50% 100%, 0 60%); }
+  .rio-rolagem { overflow-x: auto; border: 3px solid #1c1424; border-radius: 6px; background: #245a88; margin-bottom: 12px; }
+  .rio-caixa { position: relative; }
+  .rio-caixa canvas { display: block; image-rendering: pixelated; }
+  .rio-camada { position: absolute; inset: 0; }
+  .rio-alvo { position: absolute; background: transparent; border: 0; padding: 0; border-radius: 4px; cursor: pointer; }
+  div.rio-alvo.estrutura { cursor: help; }
+  .rio-alvo:hover, .rio-alvo:focus-visible { outline: 2px dashed #ffe07a; outline-offset: 1px; }
+  .rio-alvo.sobre { outline: 3px solid #7cff7a; }
+  .rio-placa, .rio-nome { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; pointer-events: none;
+    font: 600 12px/1.2 system-ui, sans-serif; color: #fff; background: rgba(28,20,36,.85); padding: 2px 6px; border-radius: 3px; }
+  .rio-placa { bottom: 2px; }
+  .rio-nome { top: -8px; }
+  .rio-alvo.ativo .rio-nome { background: #ffe07a; color: #1c1424; }
+  .rio-bracos { display: grid; grid-template-columns: repeat(auto-fill, minmax(412px, 1fr)); gap: 12px; }
+  .rio-braco { margin: 0; background: #1c1424; border-radius: 6px; padding: 6px; }
+  .rio-braco figcaption { color: #ffe9b8; font-weight: 600; font-size: 13px; padding: 2px 4px 6px; }
+
   @media (max-width: 800px) {
     #telaMontagem { grid-template-columns: 1fr; height: auto; }
     aside { max-height: 45vh; border-right: 0; border-bottom: 1px solid var(--borda); }
@@ -141,17 +181,21 @@
 <body>
 <header>
   <div class="inst">Secretaria de Estado da Agricultura e do Abastecimento | IDR-Paraná | Diretoria de Extensão Rural | Departamento de Planejamento | Divisão de Planejamento e Inteligência de Dados</div>
+  <img id="logoCab" class="logo-px so-rio" alt="IDR-Paraná">
   <h1>Arranjos Regionais 2027</h1>
   <span class="reg" id="cabRegional"></span>
   <div class="dir">
     <span id="cabSalvo" aria-live="polite"></span>
+    <button id="btnModo"></button>
     <button id="btnSair" class="oculto">Sair</button>
   </div>
 </header>
 <div id="avisoPrazo" class="aviso oculto"></div>
 
 <section id="telaEntrada">
+  <canvas id="fundoEntrada" class="so-rio" aria-hidden="true"></canvas>
   <div class="cartao-entrada">
+    <div class="logo-entrada so-rio"><img id="logoEntrada" alt="IDR-Paraná"><b>IDR-Paraná</b></div>
     <h2>Montagem dos arranjos regionais</h2>
     <p>Escolha a sua regional e informe o código recebido da DEPLAN.</p>
     <div class="campo">
@@ -169,6 +213,7 @@
 
 <section id="telaMontagem" class="oculto">
   <aside>
+    <div class="cab-barraca so-rio"><b id="tituloBarraca">Itens</b><button id="btnFecharBarraca">Fechar</button></div>
     <div class="abas" role="tablist">
       <button data-aba="cadeia" class="ativa">Cadeias Produtivas</button>
       <button data-aba="transversal">Áreas Transversais</button>
@@ -177,7 +222,7 @@
       <button data-aba="tecnico">Equipe</button>
     </div>
     <div class="busca"><input id="inpBusca" placeholder="Buscar…" aria-label="Buscar peças"></div>
-    <div class="dica">Arraste uma peça até um arranjo, ou clique no arranjo e depois na peça.</div>
+    <div class="dica" id="dicaPaleta">Arraste uma peça até um arranjo, ou clique no arranjo e depois na peça.</div>
     <div class="paleta" id="paleta"></div>
   </aside>
   <main>
@@ -187,6 +232,7 @@
       <button id="btnConcluir">Marcar regional como concluída</button>
       <span class="estado" id="estadoRegional"></span>
     </div>
+    <div id="rio" class="so-rio"></div>
     <div class="grade" id="grade"></div>
     <div id="caixaMetas" class="oculto" aria-live="polite">
       <div class="cab" id="cabMetas"><b id="tituloMetas">Metas atendidas</b><button id="btnMetas" aria-label="Recolher ou abrir a caixa de metas">–</button></div>
@@ -202,6 +248,478 @@
   <div class="corpo" id="corpoConferencia"></div>
 </dialog>
 
+<script>
+// ===== Modo rio: front animado em pixel art. Só desenha; os dados e o salvamento continuam no script principal. =====
+window.RIO = (function () {
+  'use strict';
+  const CHAVE = 'arranjos_modo';
+  let modo = 'rio';
+  try { modo = localStorage.getItem(CHAVE) || 'rio'; } catch (e) { /* armazenamento bloqueado: fica o padrão */ }
+  const parado = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAlCAYAAAAEGWqvAAACqklEQVR42tVZPY/TQBCdOeUqiqRIlVzpgoLSQldEFPcL3FDyB65BOq3QiQZBhZCFREONRHkS2l9AleJ0yg+g2A64iiIUVEHaq8as1/sxXq+TY5o4Xtt5b+fN7FsH4D+KelPpelNp89xkHz9Kx6KUmPoM+QNA3Bx3xnAs0O+/vgUAgN8/f7XGpss5XJxdssgQ8PVtG3j9eNfcj2OBt4HbMV3O4fbFQwwBB+iCXy12UJ3AOATqTaVffRbs610kbPAE2CfBrAQW777p2Mzb8fpZDaKUSLVC4G3Q5jgRW1cS8ZDgzZowwyZky6iJ8yucHLo1ukivZKVdHccl2cmYQLhBskmJSb7iHfYM0vy/7ztn0SqltNyKbhGT5lIXmwfP1zoVfKilsjNgV7vrfIjcdDlPltHF2SUIT2arWR28FzkWIBailJjahQAA/nxYYQp41jrQhwiFz0ZQ6O+qOX7zUnplq5TSgwnYRMyOYRcejZvnicz2+rpz7ez0lK19HxlMdYZ2B6lmNcitcLZEGn/y5W9Dpg94H5GiKHCQvXUBpVXUNx7rdLb2i6LALBLikLDNl2vc5Si5updb0bkHhy5gJkjTs5Bn93l6IrKu2oA4hWtmBnOswjGAoWvsDUpfEpjLSvjMF5eEnY0YiWwZyEmiTzayEyAbHJvhHCTMznSUk4BdkHYHIj/lWgBb1uTmuOUAQq00KwGavRAwpZQWpcTQdSESNplRXqvAx6feAjSLNSQ5c9sYGj4aA39odklKAACfHtWsuto7Ae4WsiiKqJRMwnsjIEqJqwUvC6k7wNEzEOs0XMnZLfVeSIi6DIdYLEPjZYCxHaQFygWSA35UAjEfT/bYbK/N5/kVcmvj4G/mWru2k13vor43BFK70UEImLu2oYGwp7+XqLA5tdEn7gBridFQjj2KPwAAAABJRU5ErkJggg==';
+  const LOGO_P = new Image(); LOGO_P.onload = () => Object.keys(fundos).forEach(k => delete fundos[k]); LOGO_P.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAATCAYAAACKsM07AAABcElEQVR42rWUL27DMBTGP1cJGuhAUJoDjE6KIoOQ9QQmu8TIpMqaykarKSrcBQZHcoKigCjKAXaALmhgwwEeiF6bvvw1qEnkZ/v9nr/3OcAVRlIqk5TKAIBjc2h/2OHv+wcAsFx5qF7uBN+jCxe6AGK/BgCIuclfP3QnTpCkVCY9NjEVXO6ZBfDfvgxV3gfZrLenuS7cc2FRPQ9w85yZsfX7h2RwzbnQL0yFbUOXKw+ZGj53AugwFdR5PvYHD0MSbdZb6J54nudmsAfUNN6wBrYDAPzmOW6l7DipDZBSCjHmHO4MmlNsjqSTG+JUmaxyEfs1VNBAsqpxSuzXHf1JGimlAIDFFICqzyoXunChgsZ+FMP7o+nrHYEmATpMBSVs+5zHCEKV03e2LUmq03j6FDyWRHWnL4u5AO6opFSG69++iTWAV9YnFXeaFYBcw2/B1/mtrABcpvR4vllfcmvA4KOM6sH/kWObjB5cuy9jL/ofo4SxHzN/atQAAAAASUVORK5CYII=';
+
+  // ---------- sprites ----------
+  const OL = '#1c1424';
+  const T = {
+    wood: ['#5a3622', '#8a5634', '#bd8550'], jute: ['#7d5f3c', '#ab8656', '#d6b47e'], red: ['#7e2533', '#c2413b', '#f07a5a'],
+    grn: ['#24563a', '#3f8a3e', '#86c25a'], dgrn: ['#1d3d2c', '#2f6a3a', '#5aa048'], yel: ['#a8701c', '#e0ac34', '#ffe07a'],
+    wht: ['#8e98ad', '#d6dce8', '#ffffff'], mtl: ['#46506a', '#7f8ca6', '#c6d0e2'], blu: ['#1d4a78', '#3678bd', '#82c6f0'],
+    org: ['#97461c', '#e0782a', '#ffb45c'], crm: ['#a88a5c', '#e5cf9e', '#fff3cf'], cop: ['#7a3a20', '#c0683a', '#f0a070'],
+    brn: ['#4a3020', '#6e4a30', '#9a6c48'], ter: ['#7a3420', '#b85a32', '#e08a5a'], gourd: ['#4a3a1e', '#7a6230', '#a8904a'],
+    mus: ['#1a1a2a', '#2e3550', '#5a6a90'], fish: ['#3a5a7a', '#7aa0c0', '#d0e6f5'], lea: ['#5a2a1a', '#8a4a2a', '#b8723f'],
+    gry: ['#5a6470', '#8a96a4', '#c4ccd6']
+  };
+  const SKINS = [['#8a5a3c', '#b07850'], ['#c08a60', '#e0b088'], ['#5a3828', '#7a5038'], ['#d8a880', '#f2c8a0']];
+  const PUB_CORES = ['#e0ac34', '#d0507a', '#7cc36a', '#c6d0e2', '#e0782a', '#8a5634', '#3f8a3e', '#3678bd', '#a77bd0', '#86c25a', '#c2413b', '#2fb0a0', '#f07a5a', '#ffe07a'];
+
+  class Spr {
+    constructor(w, h) { this.w = w; this.h = h; this.p = new Array(w * h).fill(null); }
+    set(x, y, c) { x = Math.round(x); y = Math.round(y); if (x >= 0 && y >= 0 && x < this.w && y < this.h) this.p[y * this.w + x] = c; return this; }
+    get(x, y) { return (x >= 0 && y >= 0 && x < this.w && y < this.h) ? this.p[y * this.w + x] : null; }
+    rect(x, y, w, h, c) { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this.set(x + i, y + j, c); return this; }
+    sRect(x, y, w, h, t) { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this.set(x + i, y + j, (i == 0 || j == 0) ? t[2] : (i == w - 1 || j == h - 1) ? t[0] : t[1]); return this; }
+    ell(cx, cy, rx, ry, c) { for (let y = Math.floor(cy - ry); y <= cy + ry; y++) for (let x = Math.floor(cx - rx); x <= cx + rx; x++) { const dx = (x - cx) / rx, dy = (y - cy) / ry; if (dx * dx + dy * dy <= 1) this.set(x, y, c); } return this; }
+    sEll(cx, cy, rx, ry, t) {
+      for (let y = Math.floor(cy - ry); y <= cy + ry; y++) for (let x = Math.floor(cx - rx); x <= cx + rx; x++) {
+        const dx = (x - cx) / rx, dy = (y - cy) / ry; if (dx * dx + dy * dy > 1) continue;
+        const v = -(dx * .6 + dy * .8); this.set(x, y, v > .4 ? t[2] : v < -.3 ? t[0] : t[1]);
+      } return this;
+    }
+    line(x0, y0, x1, y1, c) {
+      x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1);
+      const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1; let e = dx + dy;
+      for (;;) { this.set(x0, y0, c); if (x0 == x1 && y0 == y1) break; const e2 = 2 * e; if (e2 >= dy) { e += dy; x0 += sx; } if (e2 <= dx) { e += dx; y0 += sy; } }
+      return this;
+    }
+    blit(o, x, y) { for (let j = 0; j < o.h; j++) for (let i = 0; i < o.w; i++) { const c = o.get(i, j); if (c) this.set(x + i, y + j, c); } return this; }
+    outline(c = OL) {
+      const q = [];
+      for (let y = 0; y < this.h; y++) for (let x = 0; x < this.w; x++)
+        if (!this.get(x, y) && (this.get(x + 1, y) || this.get(x - 1, y) || this.get(x, y + 1) || this.get(x, y - 1))) q.push([x, y]);
+      q.forEach(([x, y]) => this.set(x, y, c)); return this;
+    }
+    canvas() {
+      const cv = document.createElement('canvas'); cv.width = this.w; cv.height = this.h;
+      const ctx = cv.getContext('2d'), id = ctx.createImageData(this.w, this.h);
+      this.p.forEach((c, i) => { if (!c) return; const n = parseInt(c.slice(1), 16); id.data.set([n >> 16, (n >> 8) & 255, n & 255, 255], i * 4); });
+      ctx.putImageData(id, 0, 0); return cv;
+    }
+  }
+  const spr24 = f => { const s = new Spr(24, 24); f(s); return s.outline().canvas(); };
+
+  // Mantimentos (cadeias) e ferramentas (transversais), pelo código do catálogo; código novo cai no ícone genérico.
+  const root = (s, x0, y0, x1, y1, r) => { for (let t = 0; t <= 1; t += .05) s.sEll(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, r * (1 - t * .7), r * (1 - t * .7), T.brn); s.ell(x0, y0, r * .7, r * .7, T.crm[2]); };
+  const fishV = (s, x) => { s.line(x, 3, x, 7, T.crm[0]); s.sEll(x, 13, 2.5, 5, T.fish); [[-1, 8], [1, 8], [-2, 7], [2, 7]].forEach(([dx, dy]) => s.set(x + dx, dy, T.mtl[1])); s.set(x, 16, OL); };
+  const MANT = {
+    10200: s => { s.sEll(12, 15, 8, 7, T.jute); s.sRect(8, 6, 8, 4, T.jute); s.rect(8, 9, 8, 1, T.brn[1]); [[9, 5], [12, 4], [15, 5], [11, 6], [14, 6]].forEach(([x, y]) => { s.ell(x, y, 1.3, 1, T.red[1]); s.set(x - 1, y - 1, T.red[2]); }); s.rect(10, 14, 4, 3, T.jute[0]); },
+    11300: s => { s.sEll(12, 13, 8, 8, T.wht); for (let a = 0; a < 3.2; a += .12) { s.set(12 + Math.cos(a) * 5, 13 + Math.sin(a) * 3, T.wht[0]); s.set(12 + Math.cos(a + 3) * 3, 12 + Math.sin(a + 3) * 5, T.wht[0]); } s.line(17, 19, 22, 22, T.wht[1]); },
+    13700: s => { s.sRect(6, 9, 12, 12, T.yel); s.sRect(5, 7, 14, 3, T.wood); s.rect(9, 13, 6, 5, T.crm[1]); s.rect(11, 14, 2, 3, T.yel[0]); s.rect(8, 10, 1, 3, T.yel[0]); s.ell(20, 4, 2, 1.5, T.yel[1]); s.set(20, 4, OL); s.set(19, 2, T.wht[2]); s.set(21, 2, T.wht[2]); },
+    10400: s => { [[4, 5], [2, 10], [4, 15]].forEach(([x, y]) => { s.sRect(x, y, 16, 5, T.wood); s.ell(x + 16, y + 2, 2.5, 2.5, T.crm[1]); s.set(x + 16, y + 2, T.crm[0]); }); s.rect(10, 5, 2, 15, T.jute[1]); },
+    14300: s => { s.sEll(11, 15, 7, 7, T.gourd); s.ell(11, 9, 5, 1.6, T.dgrn[2]); s.rect(5, 13, 13, 1, T.yel[0]); s.line(13, 9, 18, 2, T.mtl[2]); s.line(14, 9, 19, 2, T.mtl[1]); s.ell(19, 15, 2, 1, T.grn[2]); s.ell(20, 18, 2, 1, T.grn[1]); },
+    10500: s => { s.sEll(7, 10, 3, 3, T.red); s.sEll(12, 9, 3, 3, T.org); s.sEll(17, 10, 3, 3, T.yel); s.sEll(10, 7, 2.5, 2.5, T.grn); s.set(12, 4, T.grn[1]); s.sRect(4, 13, 16, 8, T.jute); for (let x = 6; x < 20; x += 3) s.rect(x, 14, 1, 6, T.jute[0]); s.rect(3, 12, 18, 2, T.jute[2]); },
+    15100: s => { for (let k = -3; k <= 3; k++) s.line(12, 21, 12 + k * 2, 7, T.yel[0]); for (let k = -3; k <= 3; k++) { s.ell(12 + k * 2, 5, 1.2, 3, T.yel[1]); s.set(12 + k * 2, 3, T.yel[2]); } s.rect(9, 14, 7, 2, T.red[1]); },
+    15000: s => { s.ell(9, 14, 3, 7, T.grn[1]); s.ell(15, 14, 3, 7, T.grn[0]); s.sEll(12, 11, 4, 8, T.yel); for (let y = 5; y < 19; y += 2) for (let x = 10; x < 15; x += 2) s.set(x, y, T.yel[0]); s.line(12, 3, 10, 1, T.crm[1]); s.line(13, 3, 15, 1, T.crm[1]); },
+    10900: s => { root(s, 6, 7, 18, 20, 3); root(s, 11, 5, 21, 14, 2.6); root(s, 4, 11, 12, 21, 2.4); s.ell(4, 4, 2, 1, T.grn[1]); s.ell(7, 3, 1, 2, T.grn[2]); },
+    15300: s => { s.sEll(6, 10, 3, 2, T.mus); s.sEll(10, 9, 3, 2, T.mus); s.sEll(16, 9, 4, 3, T.wht); s.set(16, 9, T.crm[2]); s.sRect(3, 12, 18, 9, T.blu); s.rect(3, 16, 18, 1, T.blu[0]); },
+    11000: s => { s.sEll(8, 10, 4, 4, T.grn); s.set(7, 8, T.grn[0]); s.line(13, 12, 13, 5, T.org[1]); s.line(14, 12, 14, 6, T.org[0]); s.set(13, 4, T.grn[2]); s.set(14, 4, T.grn[1]); s.sEll(18, 10, 2.5, 2.5, T.red); s.sRect(3, 13, 18, 8, T.wood); s.rect(3, 16, 18, 1, T.wood[0]); },
+    14200: s => { s.ell(5, 10, 2, 3, T.wht[1]); s.sEll(12, 14, 7, 5, T.wht); s.sEll(17, 8, 3, 3, T.wht); s.rect(16, 4, 3, 2, T.red[1]); s.set(20, 8, T.yel[1]); s.set(21, 8, T.yel[0]); s.set(18, 7, OL); s.set(19, 10, T.red[1]); s.line(11, 19, 11, 21, T.yel[0]); s.line(14, 19, 14, 21, T.yel[0]); s.sEll(20, 19, 2, 2.5, T.crm); },
+    14000: s => { s.sEll(12, 14, 8, 6, T.org); s.line(12, 9, 12, 19, T.org[0]); s.line(8, 10, 7, 18, T.org[0]); s.line(16, 10, 17, 18, T.org[0]); s.rect(11, 6, 2, 3, T.grn[0]); s.ell(15, 7, 2, 1, T.grn[1]); },
+    14800: s => { for (let k = 0; k < 4; k++) { s.ell(7.5 + k * 3, 6, 1.5, 2.5, T.grn[k % 2 + 1]); s.sRect(6 + k * 3, 8, 3, 13, T.crm); } s.rect(5, 15, 14, 2, T.jute[1]); },
+    10300: s => { s.sEll(14, 14, 7, 6, T.red); s.ell(14, 10, 5, 1.5, T.crm[1]); s.set(12, 15, T.crm[1]); s.set(16, 13, T.crm[1]); s.line(5, 6, 9, 10, T.wht[2]); s.line(6, 6, 10, 10, T.wht[1]); s.ell(4, 5, 1.6, 1.6, T.wht[2]); },
+    10800: s => { s.sRect(6, 9, 12, 12, T.mtl); s.sRect(8, 6, 8, 3, T.mtl); s.rect(7, 4, 10, 2, T.mtl[0]); s.rect(4, 11, 2, 3, T.mtl[0]); s.rect(18, 11, 2, 3, T.mtl[0]); s.ell(12, 15, 2, 2.5, T.wht[2]); },
+    10150: s => { s.line(2, 3, 21, 3, T.wood[1]); fishV(s, 6); fishV(s, 12); fishV(s, 18); },
+    10100: s => { s.rect(4, 9, 16, 12, T.blu[1]); s.rect(4, 9, 16, 1, T.blu[2]); s.rect(3, 9, 1, 12, T.wood[1]); s.rect(20, 9, 1, 12, T.wood[1]); s.rect(3, 21, 18, 1, T.wood[0]); s.ell(10, 15, 3, 1.5, T.org[1]); s.set(6, 14, T.org[0]); s.set(6, 16, T.org[0]); s.set(16, 12, T.wht[2]); s.sEll(16, 5, 3, 1.5, T.org); s.set(12, 4, T.org[0]); s.set(12, 6, T.org[0]); },
+    11200: s => { [[8, 9], [12, 7], [16, 9], [10, 5], [14, 4], [7, 12], [17, 12], [12, 10]].forEach(([x, y], i) => s.ell(x, y, 2.2, 1.3, T.grn[i % 3])); s.sRect(6, 14, 12, 7, T.ter); s.rect(5, 13, 14, 2, T.ter[2]); },
+    11400: s => { s.sEll(7, 16, 3, 4.5, T.crm); s.sEll(12, 17, 3, 4.5, T.crm); s.sEll(9, 9, 3, 4.5, T.crm); s.rect(16, 6, 6, 2, T.wood[1]); s.rect(16, 15, 6, 2, T.wood[1]); s.rect(17, 8, 4, 7, T.yel[1]); s.set(17, 9, T.yel[2]); s.line(17, 11, 11, 9, T.yel[2]); },
+    11100: s => { s.rect(9, 6, 1, 3, T.brn[0]); s.rect(14, 6, 1, 3, T.brn[0]); s.rect(10, 6, 4, 1, T.brn[0]); s.sRect(4, 9, 16, 11, T.lea); s.rect(8, 9, 1, 11, T.brn[0]); s.rect(15, 9, 1, 11, T.brn[0]); s.rect(10, 12, 4, 3, T.blu[2]); s.rect(10, 16, 3, 2, T.yel[1]); },
+    _: s => { s.sRect(3, 9, 18, 12, T.wood); s.rect(3, 14, 18, 1, T.wood[0]); s.sEll(8, 7, 3, 2.5, T.jute); s.sEll(15, 7, 3, 2.5, T.grn); }
+  };
+  const FERR = {
+    11600: s => { s.line(8, 10, 10, 5, T.grn[0]); s.line(10, 5, 14, 5, T.grn[0]); s.line(14, 5, 16, 10, T.grn[0]); s.sRect(7, 10, 10, 9, T.grn); s.line(17, 13, 21, 8, T.grn[1]); s.line(17, 14, 21, 9, T.grn[0]); s.rect(20, 6, 2, 3, T.grn[2]); s.set(22, 11, T.blu[2]); s.set(21, 13, T.blu[2]); s.line(4, 21, 4, 17, T.grn[1]); s.set(3, 16, T.grn[2]); s.set(5, 16, T.grn[2]); },
+    10000: s => { [[10, 8], [11, 7], [10, 6], [11, 5], [14, 8], [15, 7], [14, 6]].forEach(([x, y]) => s.set(x, y, T.wht[1])); s.sEll(12, 16, 9, 5, T.cop); s.ell(12, 12, 9, 2, T.cop[0]); s.ell(12, 12, 7, 1.4, T.yel[1]); s.rect(2, 13, 2, 2, T.cop[0]); s.rect(20, 13, 2, 2, T.cop[0]); s.line(6, 20, 5, 22, T.mtl[0]); s.line(18, 20, 19, 22, T.mtl[0]); },
+    10010: s => { s.sEll(12, 12, 9, 9, T.jute); s.ell(12, 12, 4.5, 4.5, null); for (let a = 0; a < 6.3; a += .5) s.set(12 + Math.cos(a) * 7, 12 + Math.sin(a) * 7, T.jute[0]); s.line(19, 17, 22, 22, T.jute[1]); },
+    10020: s => { for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; s.line(12, 12, 12 + Math.cos(a) * 10, 12 + Math.sin(a) * 10, T.wood[0]); s.ell(12 + Math.cos(a) * 10, 12 + Math.sin(a) * 10, 1.2, 1.2, T.wood[2]); } for (let a = 0; a < 6.3; a += .08) { s.set(12 + Math.cos(a) * 7, 12 + Math.sin(a) * 7, T.wood[1]); s.set(12 + Math.cos(a) * 6, 12 + Math.sin(a) * 6, T.wood[2]); } s.sEll(12, 12, 2, 2, T.yel); },
+    12100: s => { s.sRect(3, 11, 18, 10, T.wood); s.sRect(3, 6, 18, 6, T.wood); s.set(3, 6, null); s.set(20, 6, null); s.rect(3, 11, 18, 1, T.yel[0]); s.rect(6, 6, 2, 15, T.yel[1]); s.rect(16, 6, 2, 15, T.yel[1]); s.rect(11, 10, 2, 3, T.yel[2]); s.sEll(9, 4, 2, 1, T.yel); s.sEll(14, 3, 2, 1, T.yel); },
+    15406: s => { s.sRect(4, 6, 16, 13, T.crm); s.sEll(4, 5, 1.6, 2, T.crm); s.sEll(19, 5, 1.6, 2, T.crm); s.rect(4, 4, 16, 2, T.crm[2]); [9, 12, 15].forEach(y => s.rect(6, y, 10, 1, T.crm[0])); s.sEll(16, 17, 3, 3, T.red); s.line(15, 19, 14, 22, T.red[1]); s.line(17, 19, 18, 22, T.red[1]); },
+    15200: s => { s.rect(3, 8, 18, 10, T.mtl[0]); for (let x = 4; x < 20; x += 4) for (let y = 9; y < 17; y += 3) { s.rect(x, y, 3, 2, T.blu[1]); s.set(x, y, T.blu[2]); } s.line(12, 18, 12, 21, T.mtl[1]); s.rect(8, 22, 9, 1, T.mtl[0]); s.set(20, 3, T.yel[2]); s.set(19, 3, T.yel[1]); s.set(21, 3, T.yel[1]); s.set(20, 2, T.yel[1]); s.set(20, 4, T.yel[1]); },
+    14950: s => { s.rect(11, 2, 2, 3, T.yel[0]); for (let y = 5; y < 18; y++) { const w = 3 + (y - 5) * .45 + (y > 15 ? 2 : 0); for (let x = Math.round(12 - w); x <= 12 + w; x++) s.set(x, y, x < 11 ? T.yel[2] : x > 14 ? T.yel[0] : T.yel[1]); } s.rect(4, 18, 16, 2, T.yel[0]); s.ell(12, 21, 1.5, 1.5, T.yel[0]); },
+    14700: s => { for (let y = 6; y < 22; y++) { const w = 6 + 1.6 * Math.sin(Math.PI * (y - 6) / 15); for (let x = Math.round(12 - w); x <= 12 + w; x++) s.set(x, y, x < 9 ? T.wood[2] : x > 15 ? T.wood[0] : T.wood[1]); } s.rect(5, 8, 15, 1, T.mtl[1]); s.rect(5, 19, 15, 1, T.mtl[1]); s.ell(12, 6, 6, 1.2, T.blu[2]); s.ell(12, 14, 2.6, 1.6, T.grn[2]); s.line(10, 14, 14, 14, T.grn[0]); s.set(12, 2, T.blu[2]); s.set(12, 3, T.blu[1]); },
+    10002: s => { for (let x = 3; x <= 20; x++) { const r = .8 + Math.pow((x - 3) / 17, 2.5) * 6, cy = 15 - (x - 3) * .3; for (let y = Math.round(cy - r); y <= cy + r; y++) s.set(x, y, y < cy - r / 3 ? T.yel[2] : y > cy + r / 3 ? T.yel[0] : T.yel[1]); } s.rect(21, 4, 2, 13, T.yel[0]); s.line(10, 14, 10, 19, T.red[1]); s.set(10, 20, T.red[2]); },
+    _: s => { s.sRect(3, 10, 18, 10, T.red); s.rect(3, 13, 18, 1, T.red[0]); s.rect(9, 6, 6, 1, T.mtl[0]); s.rect(9, 6, 1, 4, T.mtl[0]); s.rect(14, 6, 1, 4, T.mtl[0]); s.rect(10, 14, 4, 2, T.mtl[2]); }
+  };
+  const MAPA = spr24(s => { s.sRect(2, 4, 20, 16, T.crm); s.sEll(2, 12, 1.5, 8, T.crm); s.sEll(21, 12, 1.5, 8, T.crm); s.ell(8, 9, 4, 3, T.grn[2]); s.ell(16, 15, 4, 3, T.grn[2]); for (let x = 3; x < 21; x++) s.set(x, 12 + Math.round(Math.sin(x * .6) * 2), T.blu[1]); [[7, 8], [10, 10], [15, 14], [17, 16], [13, 7]].forEach(([x, y]) => s.set(x, y, T.red[1])); });
+  const BANDEIRAS = spr24(s => { s.line(2, 4, 22, 4, T.brn[1]); for (let i = 0; i < 5; i++) { const x = 3 + i * 4, c = PUB_CORES[i * 2]; s.rect(x, 5, 3, 3, c); s.rect(x + 1, 8, 1, 2, c); } s.rect(1, 3, 1, 18, T.wood[0]); s.rect(22, 3, 1, 18, T.wood[0]); });
+  const iconeCache = {};
+  function icone(item) {
+    const k = (item.tipo || 'cadeia') + item.codigo;
+    if (!iconeCache[k]) { const tab = item.tipo === 'transversal' ? FERR : MANT; iconeCache[k] = spr24(tab[item.codigo] || tab._); }
+    return iconeCache[k];
+  }
+  function crewSpr(skin, shirt) { // extensionista visto de cima: chapéu de palha e ombros
+    const s = new Spr(12, 13);
+    s.ell(6, 9, 4, 2.6, shirt[1]); s.set(3, 8, shirt[2]); s.set(2, 10, skin[1]); s.set(10, 10, skin[1]);
+    s.ell(6, 5, 4.6, 3, T.yel[1]); s.ell(6, 4, 2.4, 1.6, T.yel[2]); s.rect(4, 5, 5, 1, T.red[1]);
+    return s.outline();
+  }
+  const CREW = [0, 1, 2, 3].map(i => crewSpr(SKINS[i], i % 2 ? T.grn : T.dgrn));
+  const CREW_C = CREW.map(c => c.canvas());
+  // Extensionista de costas, empurrando (quadros 0 e 1: passos) ou acenando da beira (quadro 2).
+  function empurrador(skin, shirt, q) {
+    const s = new Spr(12, 18);
+    if (q < 2) { s.rect(2, 0, 2, 7, skin[1]); s.rect(8, 0, 2, 7, skin[1]); s.rect(2, 4, 2, 3, shirt[1]); s.rect(8, 4, 2, 3, shirt[1]); }
+    else { s.rect(9, 0, 2, 7, skin[1]); s.rect(9, 4, 2, 3, shirt[1]); s.set(11, 0, skin[1]); s.rect(1, 8, 2, 4, shirt[1]); s.rect(1, 12, 2, 1, skin[1]); }
+    s.rect(3, 7, 6, 6, shirt[1]); s.rect(3, 7, 1, 6, shirt[2]); s.rect(8, 7, 1, 6, shirt[0]);
+    const pe = q === 1 ? [4, 3] : q === 0 ? [3, 4] : [4, 4];
+    s.rect(3, 13, 2, pe[0], T.blu[0]); s.rect(7, 13, 2, pe[1], T.blu[0]); s.rect(3, 12 + pe[0], 2, 1, T.brn[0]); s.rect(7, 12 + pe[1], 2, 1, T.brn[0]);
+    s.ell(6, 5, 4.6, 2.6, T.yel[1]); s.ell(6, 4, 2.4, 1.5, T.yel[2]); s.rect(4, 6, 5, 1, T.red[1]);
+    return s.outline().canvas();
+  }
+  const EMPURRA = [0, 1, 2].map(q => [0, 1, 2].map(i => empurrador(SKINS[i], i % 2 ? T.grn : T.dgrn, q)));
+
+  // ---------- embarcação vista de cima, em 3/4 ----------
+  const BW = 128, BH = 96, CY = 66;
+  const HULL = [{ L: 60, hw: 6, d: 4 }, { L: 66, hw: 7, d: 5 }, { L: 76, hw: 8, d: 5 }, { L: 86, hw: 9, d: 6, band: T.red[1] }, { L: 100, hw: 11, d: 7, band: T.blu[1] }];
+  function geo(stage) {
+    const h = HULL[stage], x0 = Math.round((BW - h.L) / 2);
+    const at = f => Math.round(x0 + h.L * f), half = f => { const u = f * 2 - 1; return h.hw * Math.pow(Math.max(0, 1 - u * u), .55); };
+    return { h, x0, at, half, mx: at(stage === 4 ? .56 : .4), bow: x0 + h.L - 5 };
+  }
+  function hull(s, sub, g) {
+    const h = g.h;
+    for (let i = 0; i < h.L; i++) {
+      const u = i / (h.L - 1) * 2 - 1, k = Math.max(0, 1 - u * u), w = h.hw * Math.pow(k, .55);
+      const up = Math.round(CY - w), lo = Math.round(CY + w), sb = Math.round(lo + h.d * Math.pow(k, .5)), x = g.x0 + i;
+      for (let y = up + 1; y < lo; y++) s.set(x, y, y <= up + 2 ? T.wood[1] : (i % 7 == 0 || (y - up) % 3 == 0) ? T.brn[0] : T.brn[1]);
+      s.set(x, up, T.wood[2]); s.set(x, lo, T.wood[2]);
+      for (let y = lo + 1; y <= sb; y++) {
+        s.set(x, y, h.band && y >= lo + 2 && y <= lo + 3 && sb >= lo + 4 ? h.band : y - lo <= 1 ? T.wood[1] : T.wood[0]);
+        if (y > lo + (sb - lo) * .5) sub.set(x, y, '#2f6fa0');
+      }
+    }
+  }
+  const box3 = (s, x, y, w, d, hg, top, front) => { s.rect(x, y, w, d, top[2]); s.rect(x + 1, y + 1, w - 2, d - 1, top[1]); s.rect(x, y + d, w, hg, front[0]); s.rect(x, y + d, w, 1, front[1]); };
+  const painelSolar = (s, x, y, w, d) => { s.rect(x, y, w, d, T.mtl[0]); for (let i = x + 1; i < x + w - 1; i += 3) for (let j = y + 1; j < y + d - 1; j += 2) s.set(i, j, T.blu[2]), s.set(i + 1, j, T.blu[1]); };
+
+  // spec: { stage, trans: [códigos], carga, equipe, cores: [cores do público], mapa }
+  const barcos = {};
+  function barco(spec) {
+    const chave = JSON.stringify(spec);
+    if (barcos[chave]) return barcos[chave];
+    const st = spec.stage, s = new Spr(BW, BH), sub = new Spr(BW, BH), g = geo(st), h = g.h, tem = c => spec.trans.indexOf(c) >= 0;
+    hull(s, sub, g);
+    const seat = f => { const x = g.at(f), w = g.half(f); s.rect(x, Math.round(CY - w) + 1, 3, Math.round(2 * w) - 1, T.wood[2]); s.rect(x, Math.round(CY + w) - 1, 3, 1, T.wood[0]); };
+    if (st >= 1) seat(.5);
+    if (st >= 2) seat(.36);
+    const nCarga = Math.min(spec.carga, st >= 2 ? 6 : 3);
+    for (let i = 0; i < nCarga; i++) { const x = g.at(.2 + i * .09); if (i % 2) box3(s, x - 3, CY - 5, 6, 3, 3, T.wood, T.wood); else s.sEll(x, CY - 2, 3, 2.5, T.jute); }
+    const vagas = Math.max(1, Math.floor(h.L / 18)), nEq = Math.min(spec.equipe, vagas);
+    for (let i = 0; i < nEq; i++) { const f = nEq === 1 ? .5 : .24 + i * (.58 / (nEq - 1)); s.blit(CREW[i % 4], g.at(f) - 6, CY - 9); }
+    if (spec.mapa) { const x = g.at(.3); s.sRect(x - 3, CY + 1, 6, 3, T.crm); s.set(x - 1, CY + 2, T.red[1]); }
+    if (tem('12100')) { const x = g.at(.47); box3(s, x - 3, CY, 7, 2, 3, T.wood, T.wood); s.set(x, CY + 2, T.yel[2]); }
+    if (tem('11600')) { const x = g.at(.64); box3(s, x - 3, CY + 1, 7, 2, 2, T.ter, T.ter); s.set(x - 2, CY, T.grn[2]); s.set(x, CY - 1, T.grn[1]); s.set(x + 2, CY, T.grn[2]); }
+    if (tem('14700')) { const x = g.at(.74); s.rect(x - 3, CY - 1, 6, 4, T.wood[0]); s.rect(x - 3, CY + 1, 6, 1, T.mtl[1]); s.sEll(x - .5, CY - 1, 3, 1.6, T.blu); }
+    if (tem('10000')) { const x = g.at(.84); s.sEll(x, CY, 2.5, 1.8, T.cop); s.set(x, CY - 3, T.wht[1]); s.set(x + 1, CY - 4, T.wht[1]); }
+    if (tem('10010')) { const x = g.at(.86), y = Math.round(CY + g.half(.86)) + 3; s.ell(x, y, 2.2, 2.2, T.jute[1]); s.set(x, y, T.wood[0]); }
+    if (st === 2 || st === 3) { // toldo listrado sobre postes; painel solar no teto, se houver
+      const a = g.at(st === 3 ? .6 : .5), b = g.at(st === 3 ? .84 : .8), Hh = 10, hw = Math.round(g.half((a - g.x0 + (b - a) / 2) / h.L));
+      [a, b].forEach(px => s.rect(px, CY + hw - Hh, 1, Hh, T.wood[0]));
+      for (let x = a; x <= b; x++) { const c = ((x - a) >> 2) % 2 ? [T.red[1], T.red[0]] : [T.crm[2], T.crm[0]]; s.rect(x, CY - hw - Hh, 1, 2 * hw, c[0]); s.rect(x, CY + hw - Hh, 1, 2, c[1]); }
+      if (tem('15200')) painelSolar(s, a + 3, CY - hw - Hh + 2, b - a - 5, 2 * hw - 4);
+    } else if (st < 2 && tem('15200')) { const x = g.at(.66); s.rect(x, CY - 6, 1, 6, T.mtl[0]); s.rect(x + 7, CY - 6, 1, 6, T.mtl[0]); painelSolar(s, x - 1, CY - 10, 10, 5); }
+    const poste = spec.cores.length || st >= 2 || tem('14950') || tem('10002');
+    if (poste) { const px = g.bow - 2; s.rect(px, CY - 13, 1, 13, T.wood[0]); s.rect(px, CY - 14, 4, 1, T.wood[0]); if (st >= 2) s.sRect(px + 2, CY - 13, 3, 4, T.yel); }
+    if (tem('14950')) { const x = g.bow - 8; s.rect(x, CY - 8, 1, 8, T.wood[0]); s.rect(x - 2, CY - 9, 5, 1, T.wood[0]); s.sEll(x, CY - 10, 2, 2.5, T.yel); }
+    if (tem('10002')) { const x = g.bow + 1; for (let i = 0; i < 6; i++) s.rect(x + i, CY - 4 - Math.floor(i / 2), 1, 1 + Math.floor(i / 2) * 2, i > 3 ? T.yel[2] : T.yel[1]); }
+    if (tem('15406') || (spec.cores.length && st < 3)) { const x = g.x0 + 5; s.rect(x, CY - 18, 1, 18, T.wood[0]); if (tem('15406')) { s.rect(x + 1, CY - 18, 7, 5, T.blu[1]); s.rect(x + 1, CY - 16, 7, 1, T.wht[2]); s.set(x + 4, CY - 17, T.yel[2]); } }
+    if (tem('10020')) { const x = st === 4 ? g.at(.43) : g.at(.14), y = CY - 7; s.rect(x, y, 1, 7, T.wood[0]); for (let a = 0; a < 6.3; a += .4) s.set(x + Math.cos(a) * 4, y + Math.sin(a) * 4, T.wood[1]); s.line(x - 4, y, x + 4, y, T.wood[0]); s.line(x, y - 4, x, y + 4, T.wood[0]); s.set(x, y, T.yel[2]); }
+    let topoMastro = null;
+    if (st === 4) { // cabine na popa
+      const cx = g.at(.1), cw = 28, Hh = 11, hw = h.hw - 3;
+      s.rect(cx - 1, CY - hw - Hh - 1, cw + 2, 2 * hw + 1, T.red[2]); s.rect(cx, CY - hw - Hh, cw, 2 * hw, T.red[1]);
+      if (tem('15200')) painelSolar(s, cx + 3, CY - hw - Hh + 2, cw - 6, 2 * hw - 4);
+      s.sRect(cx, CY + hw - Hh, cw, Hh, T.wood); s.rect(cx + 4, CY + hw - Hh + 3, 5, 4, T.blu[2]); s.rect(cx + cw - 9, CY + hw - Hh + 3, 5, 4, T.blu[2]);
+    }
+    if (st >= 3) { // mastro e vela em pé
+      const top = CY - (st === 4 ? 56 : 46), sw = st === 4 ? 32 : 26; topoMastro = [g.mx + 1, top];
+      s.rect(g.mx, top, 2, CY - top, T.wood[1]); s.rect(g.mx + 2, top - 2, 7, 3, st === 4 ? T.yel[1] : T.red[1]);
+      for (let y = top + 3; y < CY - 9; y++) { const w = Math.round((y - top - 3) / (CY - top - 12) * sw); for (let i = 0; i < w; i++) s.set(g.mx + 2 + i, y, i < 3 ? T.crm[0] : i > w - 3 ? T.crm[2] : T.crm[1]); }
+    }
+    if (spec.cores.length) { // bandeirolas: uma por público
+      const [ax, ay] = topoMastro || [g.x0 + 5, CY - 18], bx = g.bow - 1, by = CY - 14, n = spec.cores.length;
+      const pt = t => [Math.round(ax + (bx - ax) * t), Math.round(ay + (by - ay) * t + 4 * Math.sin(t * Math.PI))];
+      for (let i = 0; i <= 30; i++) { const [px, py] = pt(i / 30); s.set(px, py, T.brn[0]); }
+      spec.cores.forEach((c, i) => { const [px, py] = pt((i + .5) / n); s.rect(px, py + 1, 3, 2, c); s.set(px + 1, py + 3, c); });
+    }
+    return barcos[chave] = { img: s.outline().canvas(), sub: sub.canvas(), g };
+  }
+
+  // ---------- cenário ----------
+  const H = 216, FAR = 62, MARGEM = 150, BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+  function dither(ctx, x0, y0, w, h, cols) {
+    for (let y = 0; y < h; y++) {
+      const f = y / Math.max(1, h - 1) * (cols.length - 1), i = Math.min(cols.length - 2, Math.floor(f)), fr = f - i;
+      for (let x = 0; x < w; x++) { const n = ((x * 7919 + (y0 + y) * 104729) % 13) / 13 - .5; ctx.fillStyle = (fr + n * .6) * 16 > BAYER[(y & 3) * 4 + (x & 3)] ? cols[i + 1] : cols[i]; ctx.fillRect(x0 + x, y0 + y, 1, 1); }
+    }
+  }
+  const ARAUC = (() => {
+    const s = new Spr(34, 46); s.rect(15, 16, 3, 28, T.brn[1]); s.rect(15, 16, 1, 28, T.brn[2]);
+    const tier = (cy, rx, n, c) => { s.ell(16.5, cy + 1, rx * .8, 2, T.dgrn[0]); for (let k = 0; k < n; k++) { const a = Math.PI * (k / (n - 1)), tx = 16.5 - Math.cos(a) * rx, ty = cy - Math.sin(a) * 2.5 - (k == 0 || k == n - 1 ? 1 : 0); s.ell(tx, ty, 2.4, 1.8, c[0]); s.ell(tx, ty - 1, 1.8, 1.2, c[1]); s.set(tx, ty - 2, c[2]); } };
+    s.line(16, 18, 5, 15, T.brn[1]); s.line(17, 18, 28, 15, T.brn[1]); s.line(16, 12, 9, 9, T.brn[1]); s.line(17, 12, 24, 9, T.brn[1]);
+    tier(16, 13, 7, [T.dgrn[0], T.dgrn[1], T.dgrn[2]]); tier(10, 8, 5, [T.dgrn[1], T.dgrn[2], T.grn[2]]); s.ell(16.5, 5, 3, 1.6, T.dgrn[2]); s.set(16, 3, T.grn[2]);
+    return s.outline().canvas();
+  })();
+  const ARBUSTO = (() => { const s = new Spr(14, 10); s.sEll(7, 5, 6, 4, T.grn); s.set(5, 3, T.grn[2]); return s.outline().canvas(); })();
+  const CASA = (() => { const s = new Spr(44, 34); s.rect(1, 2, 42, 14, T.red[2]); s.rect(2, 3, 40, 12, T.red[1]); for (let y = 5; y < 15; y += 3) s.rect(2, y, 40, 1, T.red[0]); s.sRect(4, 16, 36, 16, T.crm); s.rect(18, 22, 7, 10, T.wood[0]); s.rect(8, 20, 6, 5, T.blu[2]); s.rect(30, 20, 6, 5, T.blu[2]); return s.outline().canvas(); })();
+  const ESCRITORIO = (() => {
+    const s = new Spr(74, 62);
+    s.rect(1, 2, 72, 20, T.gry[2]); s.rect(2, 3, 70, 18, T.gry[1]); for (let y = 6; y < 21; y += 4) s.rect(2, y, 70, 1, T.gry[0]);
+    s.sRect(4, 22, 66, 26, T.crm); s.rect(4, 22, 66, 3, T.grn[1]); s.rect(4, 25, 66, 1, T.grn[0]);
+    s.rect(31, 33, 12, 15, T.wood[0]); s.rect(32, 34, 10, 14, T.wood[1]); s.set(40, 41, T.yel[2]);
+    [8, 18, 50, 60].forEach(x => { s.rect(x, 30, 7, 7, T.blu[2]); s.rect(x + 3, 30, 1, 7, T.wht[1]); });
+    s.sRect(23, 4, 28, 22, T.wht); // placa com o logo
+    s.rect(4, 48, 66, 2, T.gry[0]); s.rect(28, 50, 18, 2, T.gry[1]);
+    return s.outline().canvas();
+  })();
+  const BARRACA = c => { const s = new Spr(44, 46); for (let x = 1; x < 43; x++) { const st = ((x >> 2) % 2) ? c : T.crm; s.rect(x, 2, 1, 11, st[1]); s.rect(x, 2, 1, 1, st[2]); s.rect(x, 13, 1, 3, st[0]); } s.rect(3, 16, 1, 28, T.wood[0]); s.rect(40, 16, 1, 28, T.wood[0]); s.sRect(4, 36, 36, 6, T.wood); return s.outline().canvas(); };
+  const sombra = (ctx, x, y, rx, ry, a = .28) => { ctx.globalAlpha = a; ctx.fillStyle = '#10202a'; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1; };
+
+  // Margem de baixo: escritório (equipe), quatro barracas e o trapiche. x em pixels lógicos.
+  const ESTRUTURAS = [
+    { x: 2, y: 146, w: 74, h: 62, aba: 'tecnico', rotulo: 'Equipe', dica: 'Escritório do IDR-Paraná: a equipe de extensionistas. Clique para escolher quem embarca.' },
+    { x: 80, y: 160, w: 44, h: 46, aba: 'cadeia', rotulo: 'Cadeias', dica: 'Barraca de mantimentos: cadeias produtivas. Clique para ver as opções.', cor: T.yel, ic: () => icone({ codigo: '10200' }) },
+    { x: 126, y: 160, w: 44, h: 46, aba: 'transversal', rotulo: 'Áreas', dica: 'Barraca de ferramentas: áreas transversais. Cada ferramenta vira um acessório da canoa.', cor: T.red, ic: () => icone({ codigo: '10020', tipo: 'transversal' }) },
+    { x: 172, y: 160, w: 44, h: 46, aba: 'publico', rotulo: 'Público', dica: 'Barraca das bandeirolas: público. Cada público é uma bandeirola no barco.', cor: T.blu, ic: () => BANDEIRAS },
+    { x: 218, y: 160, w: 44, h: 46, aba: 'municipio', rotulo: 'Municípios', dica: 'Barraca dos mapas: território. Clique para escolher os municípios.', cor: T.grn, ic: () => MAPA },
+    { x: 266, y: 118, w: 30, h: 52, aba: null, rotulo: '', dica: 'Trapiche: quando o arranjo tem cadeia ou área, municípios e equipe, a canoa entra no rio.' }
+  ];
+  const CANOAS_X = 314, VAGA = 112, VAGA_RIO = 116;
+  const fundos = {};
+  function fundo(W, comMargem) {
+    const id = W + ':' + comMargem; if (fundos[id]) return fundos[id];
+    const c = document.createElement('canvas'); c.width = W; c.height = H; const b = c.getContext('2d');
+    dither(b, 0, 0, W, FAR, ['#5fa04a', '#4f9040', '#5aa048']);
+    b.fillStyle = '#c8a36a'; for (let x = 0; x < W; x++) b.fillRect(x, 30 + Math.round(Math.sin(x * .03) * 4), 1, 4);
+    b.fillStyle = '#7a5434'; b.fillRect(0, FAR, W, 4); b.fillStyle = '#5a3a24'; for (let x = 0; x < W; x += 5) b.fillRect(x + (x % 3), FAR + 1, 1, 3);
+    dither(b, 0, FAR + 4, W, MARGEM - FAR - 4, ['#3f86b8', '#2f6fa0', '#245a88', '#2f6fa0', '#3a80b4']);
+    dither(b, 0, MARGEM, W, H - MARGEM, ['#b89a62', '#e2c48a', '#ecd096', '#e6c88c']);
+    b.fillStyle = '#5a9a44'; for (let x = 0; x < W; x += 3) b.fillRect(x, 208 + ((x * 7) % 5), 3, 12);
+    sombra(b, 92, 52, 26, 5); b.drawImage(CASA, 70, 18);
+    for (let x = 8, k = 0; x < W; x += 34 + (k * 17) % 30, k++) { if (x > 60 && x < 120) continue; const y = 4 + (k * 7) % 16; sombra(b, x + 24, y + 44, 15, 4); b.drawImage(ARAUC, x, y); }
+    for (let x = 26, k = 0; x < W; x += 70 + (k * 23) % 40, k++) { sombra(b, x + 9, 55, 7, 2); b.drawImage(ARBUSTO, x, 46); }
+    if (comMargem) {
+      ESTRUTURAS.forEach(e => {
+        if (!e.aba) return; // o trapiche é desenhado depois da água (desenharTrapiche), para a espuma não passar por cima
+        sombra(b, e.x + e.w / 2, e.y + e.h - 2, e.w / 2, 4);
+        if (e.aba === 'tecnico') { b.drawImage(ESCRITORIO, e.x, e.y); if (LOGO_P.complete) b.drawImage(LOGO_P, e.x + 25, e.y + 5); return; }
+        b.drawImage(BARRACA(e.cor), e.x, e.y); b.drawImage(e.ic(), e.x + 10, e.y + 13);
+      });
+    }
+    return fundos[id] = c;
+  }
+  function desenharTrapiche(ctx) {
+    const e = ESTRUTURAS[ESTRUTURAS.length - 1];
+    sombra(ctx, e.x + 16, 136, 18, 4, .3);
+    for (let y = e.y; y < e.y + e.h; y += 3) { ctx.fillStyle = (y / 3) % 2 ? '#a06a40' : '#8a5634'; ctx.fillRect(e.x, y, e.w, 3); ctx.fillStyle = '#5a3622'; ctx.fillRect(e.x, y + 2, e.w, 1); }
+    ctx.fillStyle = '#4a2c1c'; [e.x, e.x + e.w - 3].forEach(x => { ctx.fillRect(x, e.y - 2, 3, 4); ctx.fillRect(x, e.y + e.h, 3, 6); }); ctx.fillRect(e.x, e.y + e.h, e.w, 3);
+  }
+  const RISCOS = Array.from({ length: 90 }, (_, i) => ({ x: (i * 97) % 1000, y: FAR + 7 + (i * 37) % (MARGEM - FAR - 12), len: 2 + (i % 5) * 2, ph: i * 1.7, sp: 6 + (i % 4) * 3 }));
+
+  function desenharBarco(ctx, b, x, cy, t, naAgua) {
+    const g = b.g, bob = naAgua && !parado ? Math.round(Math.sin(t * 2.2 + x * .05) * .8) : 0, top = cy - CY + bob;
+    sombra(ctx, x + g.x0 + g.h.L / 2 + 3, cy + g.h.hw + (naAgua ? 4 : 3), g.h.L / 2, naAgua ? g.h.hw * .7 : 3, naAgua ? .25 : .2);
+    ctx.drawImage(b.img, x, top);
+    if (naAgua) { ctx.globalAlpha = .7; ctx.drawImage(b.sub, x, top); ctx.globalAlpha = 1; }
+  }
+  function desenharAgua(ctx, W, t) {
+    ctx.fillStyle = '#e8f8ff';
+    RISCOS.forEach(s => { if (s.x > W) return; if (Math.sin(t * 1.3 + s.ph) > 0) { ctx.globalAlpha = .55; ctx.fillRect(Math.round((s.x + t * s.sp) % (W + 20)) - 10, s.y, s.len, 1); } });
+    ctx.globalAlpha = .8; for (let x = 0; x < W; x += 3) { if (Math.sin(t * 2 + x * .4) > .2) ctx.fillRect(x, FAR + 4, 2, 1); if (Math.sin(t * 2.4 + x * .3) > .1) ctx.fillRect(x, MARGEM - 1 + Math.round(Math.sin(t * 1.5 + x * .1)), 3, 1); }
+    ctx.globalAlpha = 1;
+  }
+
+  // ---------- laço de animação único ----------
+  const ativos = new Set();
+  let ultimo = 0, rodando = false;
+  function quadro(agora) {
+    const t = agora / 1000, dt = Math.min(.05, (agora - (ultimo || agora)) / 1000); ultimo = agora;
+    ativos.forEach(r => { if (!r.canvas.isConnected) ativos.delete(r); else if (r.canvas.getClientRects().length) r.desenhar(t, dt); });
+    if (ativos.size && !parado) requestAnimationFrame(quadro); else rodando = false;
+  }
+  function registrar(r) { ativos.add(r); if (parado) { if (r.canvas.getClientRects().length) r.desenhar(0, 1); return; } if (!rodando) { rodando = true; ultimo = 0; requestAnimationFrame(quadro); } }
+  function escala(host, W) { return Math.max(1, Math.min(3, Math.floor((host.clientWidth || 800) / Math.min(W, 420)))); }
+
+  // ---------- cena da regional ----------
+  const ESTAGIO = [0, 0, 1, 2, 3, 4];
+  const anim = {}, sai = {};
+  let cenaAtual = null;
+  function cena(host, d, cb) {
+    // d: { arranjos: [{ chave, ativo, completo, falta, dica, nome, spec }], travado }
+    const nInc = d.arranjos.filter(a => !a.completo).length, nComp = d.arranjos.length - nInc;
+    const s = Math.max(1, Math.min(escala(host, 420), Math.floor((innerHeight - 220) / H)));
+    const W = Math.max(400, Math.floor(((host.clientWidth || 800) - 6) / s), CANOAS_X + nInc * VAGA + 16, nComp * VAGA_RIO + 24);
+    let c = cenaAtual && cenaAtual.host === host && cenaAtual.W === W ? cenaAtual : null;
+    if (!c) {
+      host.innerHTML = '';
+      const rol = document.createElement('div'); rol.className = 'rio-rolagem';
+      const caixa = document.createElement('div'); caixa.className = 'rio-caixa';
+      const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H; canvas.setAttribute('aria-hidden', 'true');
+      const camada = document.createElement('div'); camada.className = 'rio-camada';
+      caixa.append(canvas, camada); rol.append(caixa); host.append(rol);
+      caixa.style.width = W * s + 'px'; caixa.style.height = H * s + 'px'; canvas.style.width = '100%'; canvas.style.height = '100%';
+      ESTRUTURAS.forEach(e => {
+        const bt = document.createElement(e.aba ? 'button' : 'div');
+        bt.className = 'rio-alvo estrutura'; bt.title = e.dica; if (e.aba) bt.setAttribute('aria-label', e.dica);
+        Object.assign(bt.style, { left: e.x * s + 'px', top: e.y * s + 'px', width: e.w * s + 'px', height: e.h * s + 'px' });
+        if (e.rotulo) { const r = document.createElement('span'); r.className = 'rio-placa'; r.textContent = e.rotulo; bt.append(r); }
+        if (e.aba) bt.addEventListener('click', () => cb.barraca(e.aba, e.rotulo));
+        camada.append(bt);
+      });
+      c = cenaAtual = { host, W, s, canvas, ctx: canvas.getContext('2d'), camada, alvos: {}, d, fixo: false };
+      c.desenhar = (t, dt) => desenharCena(c, t, dt);
+    }
+    c.d = d;
+    // posições: incompletos na areia, completos ancorados no rio em duas fileiras
+    let iInc = 0, iComp = 0;
+    const vivos = {};
+    d.arranjos.forEach(a => {
+      a.areia = { x: CANOAS_X + iInc * VAGA - 10, cy: 166 }; a.rio = { x: 4 + iComp * VAGA_RIO, cy: iComp % 2 ? 128 : 100 }; // uma vaga por canoa: nenhuma cobre a outra
+      if (a.completo) iComp++; else iInc++;
+      if (anim[a.chave] === undefined) anim[a.chave] = a.completo ? 1 : 0;
+      vivos[a.chave] = true;
+      let alvo = c.alvos[a.chave];
+      if (!alvo) {
+        alvo = document.createElement('div'); alvo.className = 'rio-alvo canoa'; alvo.tabIndex = 0; alvo.setAttribute('role', 'button');
+        alvo.append(Object.assign(document.createElement('span'), { className: 'rio-nome' }));
+        alvo.addEventListener('click', () => cb.selecionar(alvo._a.ref));
+        alvo.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); cb.selecionar(alvo._a.ref); } });
+        alvo.addEventListener('dragover', ev => { if (!c.d.travado) { ev.preventDefault(); alvo.classList.add('sobre'); } });
+        alvo.addEventListener('dragleave', () => alvo.classList.remove('sobre'));
+        alvo.addEventListener('drop', ev => { ev.preventDefault(); alvo.classList.remove('sobre'); try { const p = JSON.parse(ev.dataTransfer.getData('text/plain')); cb.soltar(alvo._a.ref, p.tipo, p.codigo); } catch (e) { /* ignora */ } });
+        c.camada.append(alvo); c.alvos[a.chave] = alvo;
+      }
+      alvo._a = a; alvo.title = a.dica; alvo.setAttribute('aria-label', a.dica);
+      alvo.firstChild.textContent = a.nome; alvo.classList.toggle('ativo', !!a.ativo);
+    });
+    Object.keys(c.alvos).forEach(k => { if (!vivos[k]) { c.alvos[k].remove(); delete c.alvos[k]; } });
+    registrar(c);
+  }
+  function desenharCena(c, t, dt) {
+    const ctx = c.ctx, W = c.W; ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(fundo(W, true), 0, 0);
+    desenharAgua(ctx, W, t);
+    desenharTrapiche(ctx);
+    const lista = c.d.arranjos.map(a => {
+      const alvoP = a.completo ? 1 : 0; let p = anim[a.chave];
+      p = parado ? alvoP : p < alvoP ? Math.min(alvoP, p + dt * .6) : Math.max(alvoP, p - dt * .6); anim[a.chave] = p;
+      // Duas etapas: até 40% a canoa sobe reto da areia até a beira (empurrada); depois navega até a vaga no rio.
+      const suave = k => k * k * (3 - 2 * k), BEIRA = MARGEM - 14, k1 = Math.min(1, p / .4), k2 = Math.max(0, (p - .4) / .6);
+      const x = Math.round(a.areia.x + (a.rio.x - a.areia.x) * suave(k2));
+      const cy = Math.round(p <= .4 ? a.areia.cy + (BEIRA - a.areia.cy) * suave(k1) : BEIRA + (a.rio.cy - BEIRA) * suave(k2));
+      // Regional concluída: as canoas do rio descem rio abaixo (para a direita) e saem; ao reabrir, voltam pela esquerda.
+      const sAlvo = c.d.partida && a.completo ? 1 : 0;
+      let sv = sai[a.chave]; if (sv === undefined) sv = p >= 1 ? sAlvo : 0;
+      if (p >= 1 || !sAlvo) sv = parado ? sAlvo : sv < sAlvo ? Math.min(sAlvo, sv + dt * .22) : Math.max(sAlvo, sv - dt * .22);
+      sai[a.chave] = sv;
+      const xs = sv > 0 ? Math.round(sAlvo ? a.rio.x + (W + 30 - a.rio.x) * suave(sv) : a.rio.x - (a.rio.x + BW + 30) * suave(sv)) : x;
+      return { a, x: xs, cy, naAgua: cy < MARGEM + 4, b: barco(a.spec), lancando: alvoP === 1 && p > 0 && p < 1, empurrando: p < .4, foi: sv >= 1, navegando: sv > 0 && sv < 1 };
+    }).sort((p, q) => p.cy - q.cy);
+    lista.forEach(o => {
+      const alvoO = c.alvos[o.a.chave];
+      if (alvoO) alvoO.style.display = o.foi ? 'none' : '';
+      if (o.foi) return;
+      if (o.navegando) { const g = o.b.g; ctx.fillStyle = '#e8f8ff'; for (let k = 1; k < 9; k++) { ctx.globalAlpha = .5 - k * .05; const wx = o.x + g.x0 - k * 4; ctx.fillRect(wx, o.cy - g.h.hw * .5 - 1 - k, 2, 1); ctx.fillRect(wx, o.cy + g.h.hw + 1 + k, 2, 1); } ctx.globalAlpha = 1; }
+      desenharBarco(ctx, o.b, o.x, o.cy, t, o.naAgua);
+      if (o.lancando) { // a equipe empurra a canoa até a água e fica acenando na beira
+        const g = o.b.g, meio = (o.empurrando ? o.x : o.a.areia.x) + g.x0 + g.h.L / 2, fundoCasco = o.cy + g.h.hw + g.h.d - 2;
+        const naBeira = !o.empurrando || fundoCasco < MARGEM + 4, y = naBeira ? MARGEM + 2 : fundoCasco, n = Math.max(1, Math.min(3, o.a.spec.equipe));
+        for (let i = 0; i < n; i++) {
+          const px = Math.round(meio - 6 + (i - (n - 1) / 2) * 16), q = naBeira ? 2 : (Math.floor(t * 6) + i) % 2;
+          sombra(ctx, px + 6, y + 17, 5, 1.5, .3); ctx.drawImage(EMPURRA[q][i], px, y);
+        }
+      }
+      if (o.a.ativo) { const g = o.b.g, ax = o.x + g.x0 + g.h.L / 2, ay = o.cy - 34 + Math.round(Math.sin(t * 4) * 2); ctx.fillStyle = OL; ctx.fillRect(ax - 4, ay - 1, 9, 2); ctx.fillStyle = '#ffe07a'; for (let i = 0; i < 4; i++) ctx.fillRect(ax - 3 + i, ay + i, 7 - i * 2, 1); }
+      const alvo = c.alvos[o.a.chave], g = o.b.g;
+      if (alvo) Object.assign(alvo.style, { left: (o.x + g.x0) * c.s + 'px', top: (o.cy - 28) * c.s + 'px', width: g.h.L * c.s + 'px', height: (36 + g.h.d) * c.s + 'px' });
+    });
+    for (let i = 0; i < 3; i++) { const bx = Math.round(((i * 140 + t * 18) % (W + 60)) - 30), by = 20 + i * 50 + Math.round(Math.sin(t + i) * 3), up = Math.sin(t * 8 + i) > 0; ctx.fillStyle = '#f4f4f0'; ctx.fillRect(bx, by, 2, 1); ctx.fillRect(bx - 2, by + (up ? -1 : 1), 2, 1); ctx.fillRect(bx + 2, by + (up ? -1 : 1), 2, 1); }
+  }
+
+  // ---------- tela de entrada: paisagem ao fundo ----------
+  function fundoEntrada(canvas) {
+    const demo = [[4, ['10020', '15200', '14950', '12100'], 4, 5, 6], [3, ['11600', '15406'], 3, 3, 4], [2, ['14700'], 2, 2, 0], [1, [], 1, 1, 0]];
+    const r = { canvas, fixo: true, W: 0 };
+    r.desenhar = (t) => {
+      const s = Math.max(2, Math.ceil(innerHeight / H)), W = Math.ceil(innerWidth / s);
+      if (W !== r.W) { r.W = W; canvas.width = W; canvas.height = H; canvas.style.width = W * s + 'px'; canvas.style.height = H * s + 'px'; }
+      const ctx = canvas.getContext('2d'); ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(fundo(W, false), 0, 0); desenharAgua(ctx, W, t);
+      demo.forEach(([st, trans, carga, equipe, np], i) => {
+        const b = barco({ stage: st, trans, carga, equipe, cores: PUB_CORES.slice(0, np), mapa: true });
+        const ciclo = Math.max(W + 140, demo.length * 150); // mesma velocidade e espaço igual: nenhuma alcança a outra
+        const x = Math.round(((i * ciclo / demo.length + t * 8) % ciclo) - 130);
+        desenharBarco(ctx, b, x, i % 2 ? 128 : 98, t, true);
+      });
+    };
+    registrar(r);
+  }
+
+  // ---------- painel estadual: um braço de rio por regional ----------
+  function miniBarco(st) {
+    const s = new Spr(30, 22), L = 14 + st * 3, x0 = Math.round((30 - L) / 2), cy = 15;
+    for (let i = 0; i < L; i++) { const u = i / (L - 1) * 2 - 1, w = 3 * Math.pow(Math.max(0, 1 - u * u), .55); s.rect(x0 + i, Math.round(cy - w), 1, Math.round(2 * w) + 1, T.brn[1]); s.set(x0 + i, Math.round(cy - w), T.wood[2]); s.set(x0 + i, Math.round(cy + w), T.wood[2]); s.set(x0 + i, Math.round(cy + w) + 1, st >= 3 ? (st === 4 ? T.blu[1] : T.red[1]) : T.wood[0]); }
+    if (st >= 1) s.rect(x0 + Math.round(L * .4), cy - 1, 2, 2, T.jute[1]);
+    if (st >= 2) s.rect(x0 + Math.round(L * .6), cy - 3, 4, 2, T.red[1]);
+    if (st >= 3) { const mx = x0 + Math.round(L * .4); s.rect(mx, 2, 1, cy - 2, T.wood[0]); for (let y = 3; y < cy - 2; y++) s.rect(mx + 1, y, Math.round((y - 3) * .6), 1, T.crm[1]); }
+    if (st === 4) s.sRect(x0 + 1, cy - 4, 5, 4, T.wood);
+    return s.outline().canvas();
+  }
+  const MINI = [0, 1, 2, 3, 4].map(miniBarco);
+  function painel(p) {
+    const grade = document.createElement('div'); grade.className = 'rio-bracos';
+    const TW = 200, TH = 92;
+    const bg = document.createElement('canvas'); bg.width = TW; bg.height = TH; const b = bg.getContext('2d');
+    dither(b, 0, 0, TW, 18, ['#5fa04a', '#4f9040']); b.fillStyle = '#2f6a3a'; for (let x = 4; x < TW; x += 17) { b.fillRect(x - 3, 6 + (x % 5), 7, 2); b.fillRect(x, 8 + (x % 5), 1, 6); }
+    b.fillStyle = '#7a5434'; b.fillRect(0, 18, TW, 2); dither(b, 0, 20, TW, 46, ['#3f86b8', '#2f6fa0', '#3a80b4']); dither(b, 0, 66, TW, 26, ['#b89a62', '#e6c88c']);
+    p.resumo.forEach(r => {
+      const arr = p.arranjos.filter(a => a.regional === r.regional);
+      const info = arr.map(a => {
+        const zonas = [a.cadeias.length, a.transversais.length, a.publicos.length, a.municipios.length, a.tecnicos].filter(Boolean).length;
+        return { a, st: ESTAGIO[zonas], ok: !!(a.projetos.length && a.municipios.length && a.tecnicos) };
+      });
+      const noRio = info.filter(i => i.ok).length;
+      const fig = document.createElement('figure'); fig.className = 'rio-braco';
+      const cap = document.createElement('figcaption'); cap.textContent = r.regional + ' · ' + noRio + ' de ' + arr.length + ' no rio'; fig.append(cap);
+      const caixa = document.createElement('div'); caixa.className = 'rio-caixa'; caixa.style.width = TW * 2 + 'px'; caixa.style.height = TH * 2 + 'px';
+      const canvas = document.createElement('canvas'); canvas.width = TW; canvas.height = TH; canvas.style.width = '100%'; canvas.style.height = '100%'; canvas.setAttribute('aria-hidden', 'true');
+      const camada = document.createElement('div'); camada.className = 'rio-camada';
+      let iA = 0, iT = 0;
+      info.forEach(i => { i.x = i.ok ? 4 + (iA % 6) * 32 : 4 + (iT % 6) * 32; i.y = i.ok ? (iA++ % 2 ? 40 : 26) + Math.floor(iA / 13) * 6 : 62 + (iT++ % 2) * 6;
+        const alvo = document.createElement('div'); alvo.className = 'rio-alvo'; alvo.tabIndex = 0;
+        alvo.title = i.a.nome + (i.ok ? ' · no rio' : ' · na margem (incompleto)') + '\nCadeias: ' + (i.a.cadeias.join(', ') || '—') + '\nÁreas: ' + (i.a.transversais.join(', ') || '—') + '\nPúblico: ' + (i.a.publicos.join(', ') || '—') + '\nMunicípios: ' + i.a.municipios.length + ' · Equipe: ' + i.a.tecnicos;
+        alvo.setAttribute('aria-label', alvo.title);
+        Object.assign(alvo.style, { left: (i.x + 6) * 2 + 'px', top: (i.y + 6) * 2 + 'px', width: 36 + 'px', height: 26 + 'px' });
+        camada.append(alvo);
+      });
+      if (!arr.length) fig.title = 'Nenhum arranjo ainda';
+      caixa.append(canvas, camada); fig.append(caixa); grade.append(fig);
+      const rr = { canvas, desenhar: t => { const ctx = canvas.getContext('2d'); ctx.imageSmoothingEnabled = false; ctx.drawImage(bg, 0, 0);
+        ctx.fillStyle = '#e8f8ff'; for (let k = 0; k < 8; k++) if (Math.sin(t * 1.3 + k * 2) > 0) ctx.fillRect(Math.round((k * 37 + t * 6) % TW), 24 + (k * 11) % 38, 3, 1);
+        info.forEach((i, k) => { const bob = i.ok && !parado ? Math.round(Math.sin(t * 2 + k)) : 0; sombra(ctx, i.x + 16, i.y + 18 + bob, 9, 2, .2); ctx.drawImage(MINI[i.st], i.x, i.y + bob); }); } };
+      registrar(rr);
+    });
+    return grade;
+  }
+
+  return {
+    ligado: () => modo === 'rio',
+    definir(m) { modo = m; try { localStorage.setItem(CHAVE, m); } catch (e) { /* ok */ } document.body.classList.toggle('modo-rio', m === 'rio'); },
+    LOGO, icone, crew: () => CREW_C[0], corPublico: i => PUB_CORES[i % PUB_CORES.length],
+    estagio: zonas => ESTAGIO[zonas], cena, fundoEntrada, painel
+  };
+})();
+document.body.classList.toggle('modo-rio', RIO.ligado());
+</script>
 <script>
 (function () {
   'use strict';
@@ -296,6 +814,7 @@
     sinal('Carregando…');
     api('carregarRegional', s.token).then(function (d) {
       estado.dados = d; sinal('');
+      d.arranjos.forEach(function (a) { a._lancado = !faltaDe(a).length; }); // completos já salvos começam no rio
       mostrar('telaMontagem');
       avisoPrazo(d.estado);
       desenharTudo();
@@ -310,6 +829,7 @@
 
   function sair() {
     try { sessionStorage.removeItem('arranjos_sessao'); } catch (e) { /* ok */ }
+    fecharBarraca();
     estado.token = null; estado.dados = null; estado.abertos = {}; $('cabRegional').textContent = ''; sinal('');
     $('avisoPrazo').classList.add('oculto'); $('telaMontagem').classList.remove('com-aviso');
     mostrar('telaEntrada');
@@ -405,12 +925,13 @@
       el('div', {}, [el('div', { text: item.nome }), sub ? el('div', { class: 'sub', text: sub }) : null]),
       uso[item.codigo] ? el('span', { class: 'uso', text: uso[item.codigo] + ' arr.' }) : null
     ]);
+    if (RIO.ligado()) iconePeca(n, tipo, item, sub);
     n.addEventListener('dragstart', function (ev) {
       ev.dataTransfer.setData('text/plain', JSON.stringify({ tipo: tipo, codigo: item.codigo }));
       ev.dataTransfer.effectAllowed = 'copy';
     });
     function incluirNoAtivo() {
-      if (!estado.ativo) { alert('Clique primeiro no arranjo que vai receber a peça (ou crie um novo).'); return; }
+      if (!estado.ativo) { alert(RIO.ligado() ? 'Clique primeiro na canoa que vai receber o item (ou crie uma com “+ Novo arranjo”).' : 'Clique primeiro no arranjo que vai receber a peça (ou crie um novo).'); return; }
       adicionar(estado.ativo, tipo, item.codigo);
     }
     n.addEventListener('click', incluirNoAtivo);
@@ -486,6 +1007,7 @@
   }
 
   function desenharGrade() {
+    if (RIO.ligado()) { desenharRio(); return; }
     var g = $('grade'); g.innerHTML = '';
     if (!estado.dados.arranjos.length) {
       g.appendChild(el('div', { class: 'vazio-geral' }, [
@@ -521,6 +1043,7 @@
     ZONAS_CARTAO.forEach(function (z) { c.appendChild(zona(a, z, travado)); });
     var rod = el('div', { class: 'rodape-card' }, [el('span', { 'data-status': a.id || a._tmp, text: a.atualizado_em ? 'Salvo' : '' })]);
     if (!travado) rod.appendChild(el('button', { text: 'Excluir arranjo', onclick: function (ev) { ev.stopPropagation(); excluir(a); } }));
+    if (!travado && RIO.ligado()) rod.appendChild(el('button', { class: 'primario', text: a._lancado ? 'Salvar' : 'Salvar e lançar ao rio', onclick: function (ev) { ev.stopPropagation(); salvarELancar(a); } }));
     c.appendChild(rod);
     return c;
   }
@@ -542,7 +1065,7 @@
       var item = itemDe(tipo, codigo);
       var deFora = tipo === 'tecnico' && item.codigo && !daMinhaRegional(item);
       var ch = el('span', { class: 'chip t-' + tipo + (item.tipo ? ' ' + item.tipo : '') + (deFora ? ' fora' : ''),
-        title: tipo === 'tecnico' ? detalheTecnico(item) : '' }, [nomeDe(tipo, codigo)]);
+        title: tipo === 'tecnico' ? detalheTecnico(item) : (RIO.ligado() ? rotulo + ': ' + nomeDe(tipo, codigo) : '') }, [nomeDe(tipo, codigo)]);
       if (!travado) ch.appendChild(el('button', { 'aria-label': 'Remover', text: '×', onclick: function (ev) {
         ev.stopPropagation(); cod.splice(cod.indexOf(codigo), 1); alterou(a);
       } }));
@@ -552,7 +1075,102 @@
     return z;
   }
 
+  // ---------- modo rio: cada arranjo é uma canoa; os itens ficam nas barracas e no escritório ----------
+  var TITULOS_BARRACA = { cadeia: 'Barraca de mantimentos · Cadeias Produtivas', transversal: 'Barraca de ferramentas · Áreas Transversais',
+    publico: 'Barraca das bandeirolas · Público', municipio: 'Barraca dos mapas · Municípios', tecnico: 'Escritório · Equipe' };
+
+  function iconePeca(n, tipo, item, sub) {
+    var desenho = tipo === 'projeto' ? RIO.icone(item) : tipo === 'tecnico' ? RIO.crew() : null;
+    if (desenho) {
+      var cv = el('canvas', { width: desenho.width, height: desenho.height, class: tipo === 'tecnico' ? 'eq' : '' });
+      cv.getContext('2d').drawImage(desenho, 0, 0); n.insertBefore(cv, n.firstChild);
+    }
+    if (tipo === 'publico') { var cor = el('span', { class: 'cor' }); cor.style.background = RIO.corPublico(catalogo('publico').indexOf(item)); n.insertBefore(cor, n.firstChild); }
+    n.title = item.nome + (sub ? '\n' + sub : '') + '\nArraste até uma canoa, ou clique para embarcar na canoa selecionada.';
+  }
+
+  function faltaDe(a) {
+    var falta = [];
+    if (!a.itens.projeto.length) falta.push('cadeia ou área');
+    if (!a.itens.municipio.length) falta.push('municípios');
+    if (!a.itens.tecnico.length) falta.push('equipe');
+    return falta;
+  }
+
+  // A canoa só entra no rio quando o arranjo está completo e o usuário clica em Salvar.
+  function salvarELancar(a) {
+    clearTimeout(estado.timers[a.id || a._tmp]);
+    salvar(a);
+    var falta = faltaDe(a);
+    if (falta.length) { alert('Arranjo salvo. Para a canoa ir ao rio, falta: ' + falta.join(', ') + '.'); return; }
+    a._lancado = true; desenharGrade();
+  }
+
+  function infoCanoa(a) {
+    var nomes = function (tipo, lista) { return lista.map(function (c) { return nomeDe(tipo, c); }); };
+    var cad = a.itens.projeto.filter(function (c) { return (itemDe('projeto', c).tipo || 'cadeia') === 'cadeia'; });
+    var tra = a.itens.projeto.filter(function (c) { return itemDe('projeto', c).tipo === 'transversal'; });
+    var falta = faltaDe(a);
+    if (falta.length) a._lancado = false;
+    a._chave = a._chave || a._tmp || a.id; // chave fixa: o id que chega depois do primeiro salvamento não reinicia a animação
+    var zonas = [cad.length, tra.length, a.itens.publico.length, a.itens.municipio.length, a.itens.tecnico.length].filter(Boolean).length;
+    var nome = String(a.nome || '').trim() || 'sem nome';
+    var linha = function (r, l) { return r + ' (' + l.length + '): ' + (l.join(', ') || '—'); };
+    var codPub = catalogo('publico').map(function (p) { return p.codigo; });
+    return {
+      ref: a, chave: a._chave, nome: nome, ativo: estado.ativo === a, completo: !falta.length && !!a._lancado,
+      dica: [nome + (falta.length ? ' · na margem, falta: ' + falta.join(', ') : a._lancado ? ' · no rio' : ' · pronta: clique em “Salvar e lançar ao rio”'),
+        linha('Cadeias produtivas', nomes('projeto', cad)), linha('Áreas transversais', nomes('projeto', tra)),
+        linha('Público', nomes('publico', a.itens.publico)), linha('Municípios', nomes('municipio', a.itens.municipio)),
+        linha('Equipe', nomes('tecnico', a.itens.tecnico))].join('\n'),
+      spec: { stage: RIO.estagio(zonas), trans: tra.map(String), carga: cad.length, equipe: a.itens.tecnico.length,
+        cores: a.itens.publico.map(function (c) { return RIO.corPublico(codPub.indexOf(c)); }), mapa: a.itens.municipio.length > 0 }
+    };
+  }
+
+  function desenharRio() {
+    RIO.cena($('rio'), { arranjos: estado.dados.arranjos.map(infoCanoa), travado: bloqueado(), partida: !!estado.dados.concluido }, {
+      selecionar: function (a) { estado.ativo = a; desenharGrade(); desenharMetas(); },
+      soltar: function (a, tipo, codigo) { estado.ativo = a; adicionar(a, tipo, codigo); desenharGrade(); desenharMetas(); },
+      barraca: abrirBarraca
+    });
+    var g = $('grade'); g.innerHTML = '';
+    if (estado.ativo && estado.dados.arranjos.indexOf(estado.ativo) >= 0) { g.appendChild(cartao(estado.ativo)); return; }
+    if (estado.dados.concluido) { g.appendChild(el('div', { class: 'vazio-geral' }, [el('p', { text: 'Regional concluída: as canoas desceram o rio. Para alterar algum arranjo, clique em “Reabrir regional”.' })])); return; }
+    g.appendChild(el('div', { class: 'vazio-geral' }, [
+      el('p', { text: estado.dados.arranjos.length ? 'Clique numa canoa para ver e editar o arranjo.' : 'Nenhum arranjo ainda. Clique em “+ Novo arranjo” para pôr uma canoa na margem.' }),
+      el('p', { text: 'Os itens ficam na margem: barracas de cadeias, áreas, público e municípios, e a equipe no escritório. Clique numa delas e arraste o item até a canoa, ou clique no item para embarcar na canoa selecionada. Com cadeia ou área, municípios e equipe, clique em “Salvar e lançar ao rio”. Ao marcar a regional como concluída, as canoas descem o rio.' })
+    ]));
+  }
+
+  function abrirBarraca(aba) {
+    estado.aba = aba;
+    Array.prototype.forEach.call(document.querySelectorAll('.abas button'), function (x) { x.classList.toggle('ativa', x.getAttribute('data-aba') === aba); });
+    $('tituloBarraca').textContent = TITULOS_BARRACA[aba];
+    var as = document.querySelector('aside');
+    as.classList.add('aberta'); desenharPaleta();
+    as.scrollIntoView({ block: 'nearest' }); $('inpBusca').focus({ preventScroll: true });
+  }
+  function fecharBarraca() { document.querySelector('aside').classList.remove('aberta'); }
+
+  function botaoModo() {
+    var r = RIO.ligado(), b = $('btnModo');
+    b.textContent = r ? 'Visual: rio' : 'Visual: clássico';
+    b.setAttribute('aria-pressed', String(r));
+    b.title = r ? 'Trocar para o visual clássico, sem animação' : 'Trocar para o visual animado do rio';
+    $('dicaPaleta').textContent = r ? 'Arraste o item até uma canoa no rio, ou clique na canoa e depois no item.' : 'Arraste uma peça até um arranjo, ou clique no arranjo e depois na peça.';
+    // No rio, a paleta vira o balcão da barraca, logo abaixo da cena; no clássico, volta à coluna da esquerda.
+    var as = document.querySelector('aside');
+    if (r) $('rio').parentNode.insertBefore(as, $('rio').nextSibling); else $('telaMontagem').insertBefore(as, $('telaMontagem').firstChild);
+  }
+  function trocarModo() {
+    RIO.definir(RIO.ligado() ? 'classico' : 'rio'); botaoModo(); fecharBarraca();
+    if (estado.dados && !$('telaMontagem').classList.contains('oculto')) desenharTudo();
+    if (estado.painel && !$('telaPainel').classList.contains('oculto')) desenharPainel(estado.painel);
+  }
+
   function marcarAtivo() {
+    if (RIO.ligado()) { desenharGrade(); desenharMetas(); return; }
     var cards = document.querySelectorAll('.arranjo');
     estado.dados.arranjos.forEach(function (a, i) { if (cards[i]) cards[i].classList.toggle('ativo', a === estado.ativo); });
     desenharMetas();
@@ -616,7 +1234,7 @@
   function concluir() {
     var d = estado.dados, alvo = !d.concluido;
     if (alvo && conferir(true) > 0 && !confirm('A conferência aponta arranjos incompletos. Marcar como concluída assim mesmo?')) return;
-    api('marcarConcluido', estado.token, alvo).then(function (v) { d.concluido = v; desenharEstado(); }).catch(erroSessao);
+    api('marcarConcluido', estado.token, alvo).then(function (v) { d.concluido = v; desenharEstado(); if (RIO.ligado()) desenharGrade(); }).catch(erroSessao);
   }
 
   // ---------- conferência ----------
@@ -651,7 +1269,7 @@
   }
 
   function desenharPainel(p) {
-    var t = $('telaPainel'); t.innerHTML = '';
+    var t = $('telaPainel'); t.innerHTML = ''; estado.painel = p;
     var r = p.resumo, soma = function (k) { return r.reduce(function (s, x) { return s + x[k]; }, 0); };
     var barra = el('div', { class: 'barra' }, [
       el('button', { class: 'primario', text: 'Exportar planilha (CSV)', onclick: exportar }),
@@ -673,6 +1291,10 @@
      [soma('tecnicos_repetidos'), 'técnicos em mais de um arranjo']
     ].forEach(function (k) { kpis.appendChild(el('div', { class: 'kpi' }, [el('b', { text: String(k[0]) }), el('span', { text: k[1] })])); });
     t.appendChild(kpis);
+    if (RIO.ligado()) {
+      var rioReg = el('details', { class: 'bloco', open: '' }, [el('summary', {}, [el('b', { text: 'O rio das regionais' }), ' · ilustrativo: cada braço é uma regional e cada canoa um arranjo; os números que valem são os desta página']), RIO.painel(p)]);
+      t.appendChild(rioReg);
+    }
 
     var tab = el('table');
     tab.appendChild(el('tr', {}, ['Regional', 'Arranjos', 'Municípios cobertos', 'Técnicos alocados', 'Técnicos repetidos', 'Situação'].map(function (h, i) {
@@ -747,6 +1369,14 @@
   $('btnEntrar').addEventListener('click', entrar);
   $('inpCodigo').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') entrar(); });
   $('btnSair').addEventListener('click', sair);
+  $('btnModo').addEventListener('click', trocarModo);
+  $('btnFecharBarraca').addEventListener('click', fecharBarraca);
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') fecharBarraca(); });
+  $('logoCab').src = $('logoEntrada').src = RIO.LOGO;
+  botaoModo();
+  RIO.fundoEntrada($('fundoEntrada'));
+  var tRedim;
+  window.addEventListener('resize', function () { clearTimeout(tRedim); tRedim = setTimeout(function () { if (RIO.ligado() && estado.dados && !$('telaMontagem').classList.contains('oculto')) desenharGrade(); }, 250); });
   $('btnNovo').addEventListener('click', novo);
   $('cabMetas').addEventListener('click', function () { estado.metasFechada = !estado.metasFechada; desenharMetas(); });
   $('btnConferir').addEventListener('click', function () { conferir(false); });
@@ -764,9 +1394,10 @@
 
   // Prévia local: fora do Apps Script, carrega a simulação de dev/.
   if (!window.API_URL && !(window.google && google.script)) {
-    var s0 = document.createElement('script'); s0.src = 'Metas.gs'; document.body.appendChild(s0);
-    var s1 = document.createElement('script'); s1.src = '../dev/mock-catalogos.js';
-    s1.onload = function () { var s2 = document.createElement('script'); s2.src = '../dev/mock.js'; s2.onload = iniciar; document.body.appendChild(s2); };
+    var v = '?v=' + Date.now(); // a prévia sempre baixa a simulação atual, sem cache
+    var s0 = document.createElement('script'); s0.src = 'Metas.gs' + v; document.body.appendChild(s0);
+    var s1 = document.createElement('script'); s1.src = '../dev/mock-catalogos.js' + v;
+    s1.onload = function () { var s2 = document.createElement('script'); s2.src = '../dev/mock.js' + v; s2.onload = iniciar; document.body.appendChild(s2); };
     s1.onerror = function () { $('erroEntrada').textContent = 'Backend indisponível.'; };
     document.body.appendChild(s1);
   } else {
