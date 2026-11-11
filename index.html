@@ -346,6 +346,27 @@ window.RIO = (function () {
       for (;;) { this.set(x0, y0, c); if (x0 == x1 && y0 == y1) break; const e2 = 2 * e; if (e2 >= dy) { e += dy; x0 += sx; } if (e2 <= dx) { e += dx; y0 += sy; } }
       return this;
     }
+    rEll(cx, cy, rx, ry, a, t) { // elipse girada (rx no eixo do ângulo); t = cor ou trio [sombra, base, luz]
+      const R = Math.max(rx, ry) + 1, co = Math.cos(a), si = Math.sin(a);
+      for (let y = Math.floor(cy - R); y <= cy + R; y++) for (let x = Math.floor(cx - R); x <= cx + R; x++) {
+        const dx = x - cx, dy = y - cy, u = (dx * co + dy * si) / rx, v = (dy * co - dx * si) / ry; if (u * u + v * v > 1) continue;
+        const w = -((u * co - v * si) * .6 + (u * si + v * co) * .8); this.set(x, y, Array.isArray(t) ? (w > .4 ? t[2] : w < -.3 ? t[0] : t[1]) : t);
+      } return this;
+    }
+    cap(x0, y0, x1, y1, r0, r1, t) { // tubo de raio r0 até r1, sombreado
+      const R = Math.max(r0, r1) + 1, vx = x1 - x0, vy = y1 - y0, L2 = vx * vx + vy * vy || 1;
+      for (let y = Math.floor(Math.min(y0, y1) - R); y <= Math.max(y0, y1) + R; y++) for (let x = Math.floor(Math.min(x0, x1) - R); x <= Math.max(x0, x1) + R; x++) {
+        const u = Math.max(0, Math.min(1, ((x - x0) * vx + (y - y0) * vy) / L2)), r = r0 + (r1 - r0) * u, dx = x - x0 - vx * u, dy = y - y0 - vy * u; if (dx * dx + dy * dy > r * r) continue;
+        const w = -(dx * .6 + dy * .8) / r; this.set(x, y, w > .4 ? t[2] : w < -.3 ? t[0] : t[1]);
+      } return this;
+    }
+    poly(pts, c) {
+      const ys = pts.map(p => p[1]);
+      for (let y = Math.ceil(Math.min(...ys)); y <= Math.max(...ys); y++) {
+        const xs = []; pts.forEach((p, i) => { const q = pts[(i + 1) % pts.length]; if ((p[1] <= y) !== (q[1] <= y)) xs.push(p[0] + (y - p[1]) / (q[1] - p[1]) * (q[0] - p[0])); });
+        xs.sort((m, n) => m - n); for (let i = 0; i + 1 < xs.length; i += 2) for (let x = Math.round(xs[i]); x <= Math.round(xs[i + 1]); x++) this.set(x, y, c);
+      } return this;
+    }
     blit(o, x, y) { for (let j = 0; j < o.h; j++) for (let i = 0; i < o.w; i++) { const c = o.get(i, j); if (c) this.set(x + i, y + j, c); } return this; }
     outline(c = OL) {
       const q = [];
@@ -362,52 +383,236 @@ window.RIO = (function () {
   }
   const spr24 = f => { const s = new Spr(24, 24); f(s); return s.outline().canvas(); };
 
-  // Mantimentos (cadeias) e ferramentas (transversais), pelo código do catálogo; código novo cai no ícone genérico.
-  const root = (s, x0, y0, x1, y1, r) => { for (let t = 0; t <= 1; t += .05) s.sEll(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, r * (1 - t * .7), r * (1 - t * .7), T.brn); s.ell(x0, y0, r * .7, r * .7, T.crm[2]); };
-  const fishV = (s, x) => { s.line(x, 3, x, 7, T.crm[0]); s.sEll(x, 13, 2.5, 5, T.fish); [[-1, 8], [1, 8], [-2, 7], [2, 7]].forEach(([dx, dy]) => s.set(x + dx, dy, T.mtl[1])); s.set(x, 16, OL); };
+  // Mantimentos (cadeias) e ferramentas (transversais), pelo código do catálogo: [nome do objeto desenhado, desenho 48x48].
+  // Código novo cai no ícone genérico (_). Os objetos das áreas transversais são os mesmos acessórios que aparecem na canoa.
+  const spr48 = f => { const s = new Spr(48, 48); f(s); return s.outline().canvas(); };
+  const VERDE_CLARO = [T.grn[1], T.grn[2], '#c4e88a'];
+  const folha = (s, x, y, rx, ry, a, t = T.grn) => { const c = Math.cos(a) * rx * .8, n = Math.sin(a) * rx * .8; s.rEll(x, y, rx, ry, a, t); s.line(x - c, y - n, x + c, y + n, t[0]); };
+  const peixe = (s, x, y, rx, ry, a, t) => { // cabeça no sentido do ângulo, rabo e barbatana atrás
+    const c = Math.cos(a), n = Math.sin(a), P = (u, v) => [x + u * c - v * n, y + u * n + v * c];
+    s.poly([P(-rx * .8, 0), P(-rx * 1.55, -ry), P(-rx * 1.55, ry)], t[0]);
+    s.poly([P(-rx * .5, -ry * .7), P(-rx * .1, -ry * 1.6), P(rx * .35, -ry * .8)], t[0]);
+    s.rEll(x, y, rx, ry, a, t);
+    const [ex, ey] = P(rx * .6, -ry * .25); s.set(ex, ey, OL);
+    if (rx > 10) { const [gx, gy] = P(rx * .3, -ry * .6), [hx, hy] = P(rx * .3, ry * .6); s.line(gx, gy, hx, hy, t[0]); s.ell(ex, ey, 2.2, 2.2, T.wht[2]); s.rect(Math.round(ex), Math.round(ey), 2, 2, OL); }
+  };
+  const colunas = (s, y0, y1, meia, t) => { // sólido de revolução em pé, sombreado da esquerda para a direita
+    for (let y = y0; y < y1; y++) { const hw = meia((y - y0) / (y1 - y0)); for (let x = Math.round(24 - hw); x <= Math.round(24 + hw); x++) { const u = (x - 24) / hw; s.set(x, y, u < -.4 ? t[2] : u > .45 ? t[0] : t[1]); } }
+  };
   const MANT = {
-    10200: s => { s.sEll(12, 15, 8, 7, T.jute); s.sRect(8, 6, 8, 4, T.jute); s.rect(8, 9, 8, 1, T.brn[1]); [[9, 5], [12, 4], [15, 5], [11, 6], [14, 6]].forEach(([x, y]) => { s.ell(x, y, 1.3, 1, T.red[1]); s.set(x - 1, y - 1, T.red[2]); }); s.rect(10, 14, 4, 3, T.jute[0]); },
-    11300: s => { s.sEll(12, 13, 8, 8, T.wht); for (let a = 0; a < 3.2; a += .12) { s.set(12 + Math.cos(a) * 5, 13 + Math.sin(a) * 3, T.wht[0]); s.set(12 + Math.cos(a + 3) * 3, 12 + Math.sin(a + 3) * 5, T.wht[0]); } s.line(17, 19, 22, 22, T.wht[1]); },
-    13700: s => { s.sRect(6, 9, 12, 12, T.yel); s.sRect(5, 7, 14, 3, T.wood); s.rect(9, 13, 6, 5, T.crm[1]); s.rect(11, 14, 2, 3, T.yel[0]); s.rect(8, 10, 1, 3, T.yel[0]); s.ell(20, 4, 2, 1.5, T.yel[1]); s.set(20, 4, OL); s.set(19, 2, T.wht[2]); s.set(21, 2, T.wht[2]); },
-    10400: s => { [[4, 5], [2, 10], [4, 15]].forEach(([x, y]) => { s.sRect(x, y, 16, 5, T.wood); s.ell(x + 16, y + 2, 2.5, 2.5, T.crm[1]); s.set(x + 16, y + 2, T.crm[0]); }); s.rect(10, 5, 2, 15, T.jute[1]); },
-    14300: s => { s.sEll(11, 15, 7, 7, T.gourd); s.ell(11, 9, 5, 1.6, T.dgrn[2]); s.rect(5, 13, 13, 1, T.yel[0]); s.line(13, 9, 18, 2, T.mtl[2]); s.line(14, 9, 19, 2, T.mtl[1]); s.ell(19, 15, 2, 1, T.grn[2]); s.ell(20, 18, 2, 1, T.grn[1]); },
-    10500: s => { s.sEll(7, 10, 3, 3, T.red); s.sEll(12, 9, 3, 3, T.org); s.sEll(17, 10, 3, 3, T.yel); s.sEll(10, 7, 2.5, 2.5, T.grn); s.set(12, 4, T.grn[1]); s.sRect(4, 13, 16, 8, T.jute); for (let x = 6; x < 20; x += 3) s.rect(x, 14, 1, 6, T.jute[0]); s.rect(3, 12, 18, 2, T.jute[2]); },
-    15100: s => { for (let k = -3; k <= 3; k++) s.line(12, 21, 12 + k * 2, 7, T.yel[0]); for (let k = -3; k <= 3; k++) { s.ell(12 + k * 2, 5, 1.2, 3, T.yel[1]); s.set(12 + k * 2, 3, T.yel[2]); } s.rect(9, 14, 7, 2, T.red[1]); },
-    15000: s => { s.ell(9, 14, 3, 7, T.grn[1]); s.ell(15, 14, 3, 7, T.grn[0]); s.sEll(12, 11, 4, 8, T.yel); for (let y = 5; y < 19; y += 2) for (let x = 10; x < 15; x += 2) s.set(x, y, T.yel[0]); s.line(12, 3, 10, 1, T.crm[1]); s.line(13, 3, 15, 1, T.crm[1]); },
-    10900: s => { root(s, 6, 7, 18, 20, 3); root(s, 11, 5, 21, 14, 2.6); root(s, 4, 11, 12, 21, 2.4); s.ell(4, 4, 2, 1, T.grn[1]); s.ell(7, 3, 1, 2, T.grn[2]); },
-    15300: s => { s.sEll(6, 10, 3, 2, T.mus); s.sEll(10, 9, 3, 2, T.mus); s.sEll(16, 9, 4, 3, T.wht); s.set(16, 9, T.crm[2]); s.sRect(3, 12, 18, 9, T.blu); s.rect(3, 16, 18, 1, T.blu[0]); },
-    11000: s => { s.sEll(8, 10, 4, 4, T.grn); s.set(7, 8, T.grn[0]); s.line(13, 12, 13, 5, T.org[1]); s.line(14, 12, 14, 6, T.org[0]); s.set(13, 4, T.grn[2]); s.set(14, 4, T.grn[1]); s.sEll(18, 10, 2.5, 2.5, T.red); s.sRect(3, 13, 18, 8, T.wood); s.rect(3, 16, 18, 1, T.wood[0]); },
-    14200: s => { s.ell(5, 10, 2, 3, T.wht[1]); s.sEll(12, 14, 7, 5, T.wht); s.sEll(17, 8, 3, 3, T.wht); s.rect(16, 4, 3, 2, T.red[1]); s.set(20, 8, T.yel[1]); s.set(21, 8, T.yel[0]); s.set(18, 7, OL); s.set(19, 10, T.red[1]); s.line(11, 19, 11, 21, T.yel[0]); s.line(14, 19, 14, 21, T.yel[0]); s.sEll(20, 19, 2, 2.5, T.crm); },
-    14000: s => { s.sEll(12, 14, 8, 6, T.org); s.line(12, 9, 12, 19, T.org[0]); s.line(8, 10, 7, 18, T.org[0]); s.line(16, 10, 17, 18, T.org[0]); s.rect(11, 6, 2, 3, T.grn[0]); s.ell(15, 7, 2, 1, T.grn[1]); },
-    14800: s => { for (let k = 0; k < 4; k++) { s.ell(7.5 + k * 3, 6, 1.5, 2.5, T.grn[k % 2 + 1]); s.sRect(6 + k * 3, 8, 3, 13, T.crm); } s.rect(5, 15, 14, 2, T.jute[1]); },
-    10300: s => { s.sEll(14, 14, 7, 6, T.red); s.ell(14, 10, 5, 1.5, T.crm[1]); s.set(12, 15, T.crm[1]); s.set(16, 13, T.crm[1]); s.line(5, 6, 9, 10, T.wht[2]); s.line(6, 6, 10, 10, T.wht[1]); s.ell(4, 5, 1.6, 1.6, T.wht[2]); },
-    10800: s => { s.sRect(6, 9, 12, 12, T.mtl); s.sRect(8, 6, 8, 3, T.mtl); s.rect(7, 4, 10, 2, T.mtl[0]); s.rect(4, 11, 2, 3, T.mtl[0]); s.rect(18, 11, 2, 3, T.mtl[0]); s.ell(12, 15, 2, 2.5, T.wht[2]); },
-    10150: s => { s.line(2, 3, 21, 3, T.wood[1]); fishV(s, 6); fishV(s, 12); fishV(s, 18); },
-    10100: s => { s.rect(4, 9, 16, 12, T.blu[1]); s.rect(4, 9, 16, 1, T.blu[2]); s.rect(3, 9, 1, 12, T.wood[1]); s.rect(20, 9, 1, 12, T.wood[1]); s.rect(3, 21, 18, 1, T.wood[0]); s.ell(10, 15, 3, 1.5, T.org[1]); s.set(6, 14, T.org[0]); s.set(6, 16, T.org[0]); s.set(16, 12, T.wht[2]); s.sEll(16, 5, 3, 1.5, T.org); s.set(12, 4, T.org[0]); s.set(12, 6, T.org[0]); },
-    11200: s => { [[8, 9], [12, 7], [16, 9], [10, 5], [14, 4], [7, 12], [17, 12], [12, 10]].forEach(([x, y], i) => s.ell(x, y, 2.2, 1.3, T.grn[i % 3])); s.sRect(6, 14, 12, 7, T.ter); s.rect(5, 13, 14, 2, T.ter[2]); },
-    11400: s => { s.sEll(7, 16, 3, 4.5, T.crm); s.sEll(12, 17, 3, 4.5, T.crm); s.sEll(9, 9, 3, 4.5, T.crm); s.rect(16, 6, 6, 2, T.wood[1]); s.rect(16, 15, 6, 2, T.wood[1]); s.rect(17, 8, 4, 7, T.yel[1]); s.set(17, 9, T.yel[2]); s.line(17, 11, 11, 9, T.yel[2]); },
-    11100: s => { s.rect(9, 6, 1, 3, T.brn[0]); s.rect(14, 6, 1, 3, T.brn[0]); s.rect(10, 6, 4, 1, T.brn[0]); s.sRect(4, 9, 16, 11, T.lea); s.rect(8, 9, 1, 11, T.brn[0]); s.rect(15, 9, 1, 11, T.brn[0]); s.rect(10, 12, 4, 3, T.blu[2]); s.rect(10, 16, 3, 2, T.yel[1]); },
-    _: s => { s.sRect(3, 9, 18, 12, T.wood); s.rect(3, 14, 18, 1, T.wood[0]); s.sEll(8, 7, 3, 2.5, T.jute); s.sEll(15, 7, 3, 2.5, T.grn); }
+    10200: ['Saca de café', s => {
+      s.sEll(26, 30, 15, 14, T.jute); s.sRect(18, 9, 16, 9, T.jute); s.ell(26, 9, 8, 3, T.brn[0]);
+      [[21, 9], [25, 8], [29, 9], [23, 10], [27, 10]].forEach(([x, y]) => s.rect(x, y, 2, 1, T.lea[2]));
+      s.rect(17, 17, 18, 2, T.brn[1]); s.rect(17, 17, 18, 1, T.brn[2]);
+      s.rEll(26, 31, 7.5, 5, 1.15, T.lea); s.line(24, 25, 28, 37, T.crm[2]);
+      folha(s, 8, 31, 6, 3, -.9, T.dgrn); s.sEll(7, 39, 4, 4, T.red); s.sEll(14, 42, 4, 4, T.red);
+    }],
+    11300: ['Ovelha', s => {
+      [14, 20, 27, 32].forEach(x => { s.rect(x, 34, 3, 9, T.mus[1]); s.rect(x, 42, 3, 2, T.mus[0]); });
+      s.sEll(8, 25, 3, 3, T.wht); s.ell(22, 26, 13, 9, T.wht[1]);
+      [[12, 22], [19, 18], [27, 18], [33, 23], [30, 31], [22, 33], [13, 30]].forEach(([x, y]) => s.sEll(x, y, 6, 5.5, T.wht));
+      s.rEll(34, 19, 3.5, 1.8, .4, T.mus); s.sEll(39, 22, 4.5, 7, T.mus); s.sEll(38, 14, 5, 3.5, T.wht);
+      s.rect(40, 20, 2, 2, T.wht[2]); s.set(41, 21, OL); s.rect(39, 27, 2, 1, T.red[2]);
+    }],
+    13700: ['Colmeia e abelha', s => {
+      s.sRect(3, 41, 38, 4, T.wood); const w = [6, 10, 13, 15, 16, 16];
+      for (let i = 5; i >= 0; i--) s.sEll(22, 13 + i * 5, w[i], 4, T.yel);
+      s.sEll(22, 9, 3, 2.5, T.yel); s.ell(22, 37, 3.5, 3.5, T.brn[0]); s.rect(19, 37, 7, 4, T.brn[0]);
+      s.ell(39, 6, 3.5, 2.5, T.wht[2]); s.ell(43, 7, 3, 2, T.wht[1]); s.rEll(40, 12, 5, 3.2, .15, T.yel);
+      s.line(39, 10, 39, 14, OL); s.line(42, 10, 42, 14, OL); s.ell(35, 11, 2.2, 2.2, T.mus[0]);
+    }],
+    10400: ['Toras de madeira e pinheiro', s => {
+      s.rect(39, 20, 3, 5, T.brn[1]); s.poly([[40.5, 2], [34, 13], [47, 13]], T.dgrn[1]); s.poly([[40.5, 8], [33, 22], [48, 22]], T.dgrn[1]);
+      s.line(40, 4, 36, 12, T.dgrn[2]); s.line(39, 11, 35, 20, T.dgrn[2]); s.line(43, 12, 46, 21, T.dgrn[0]);
+      [[14, 34], [34, 34], [24, 17]].forEach(([x, y]) => { s.sEll(x, y, 10, 10, T.brn); s.ell(x, y, 7.5, 7.5, T.crm[1]); s.ell(x, y, 5, 5, T.crm[0]); s.ell(x, y, 4, 4, T.crm[1]); s.ell(x, y, 1.2, 1.2, T.wood[1]); s.line(x + 3, y - 3, x + 5, y - 5, T.crm[0]); });
+    }],
+    14300: ['Cuia de chimarrão', s => {
+      s.sRect(12, 42, 20, 3, T.lea); s.sEll(22, 30, 13, 13, T.gourd);
+      s.sEll(22, 17, 10, 4, T.mtl); s.ell(22, 16, 8, 2.5, T.dgrn[1]); [[18, 16], [22, 15], [25, 17], [20, 17]].forEach(([x, y]) => s.set(x, y, T.dgrn[2]));
+      s.cap(25, 16, 38, 4, 1.2, 1.2, T.mtl); s.rect(37, 2, 5, 2, T.mtl[2]);
+      folha(s, 39, 36, 6, 3.5, -.7); folha(s, 41, 26, 5, 3, -1.2, T.dgrn);
+    }],
+    10500: ['Maçã e laranja', s => {
+      s.sEll(34, 31, 12, 12, T.org); [[31, 25], [39, 34], [34, 38], [42, 29], [36, 29]].forEach(([x, y]) => s.set(x, y, T.org[0])); folha(s, 39, 18, 4, 2, -.4, T.dgrn);
+      s.sEll(16, 30, 13, 13, T.red); s.ell(16, 18, 3.5, 2, T.red[0]); s.ell(10, 25, 1.5, 3, T.wht[2]);
+      s.cap(16, 19, 18, 11, 1, 1, T.brn); folha(s, 24, 11, 6, 3, -.3);
+    }],
+    15100: ['Feixe de trigo e feijões', s => {
+      for (let k = -2; k <= 2; k++) {
+        s.line(24 + k * 2, 32, 24 + k * 5, 45, T.yel[0]); s.line(25 + k * 2, 32, 25 + k * 5, 45, T.yel[1]);
+        s.line(24 + k * 2, 32, 24 + k * 6, 21, T.yel[0]); s.line(25 + k * 2, 32, 25 + k * 6, 21, T.yel[1]);
+        const L = Math.hypot(4 * k, 11), dx = 4 * k / L, dy = -11 / L, cx = 24.5 + k * 6 + dx * 7, cy = 21 + dy * 7;
+        s.line(cx + dx * 7, cy + dy * 7, cx + dx * 12, cy + dy * 12, T.yel[1]); s.rEll(cx, cy, 8, 3, Math.atan2(dy, dx), T.yel);
+        for (let j = -3; j <= 3; j++) { const e = j % 2 ? 1 : -1; s.set(cx + dx * j * 2 - dy * e, cy + dy * j * 2 + dx * e, T.yel[0]); }
+      }
+      s.sRect(18, 30, 13, 4, T.red); s.rEll(7, 42, 4, 2.6, .4, T.lea); s.rEll(42, 42, 4, 2.6, -.4, T.mus);
+    }],
+    15000: ['Espiga de milho e vagem de soja', s => {
+      s.sEll(22, 21, 9, 17, T.yel);
+      for (let y = 5; y < 38; y += 3) for (let x = 14 + (y % 2); x < 32; x += 3) if (T.yel.includes(s.get(x, y))) s.set(x, y, T.yel[0]);
+      s.line(21, 4, 18, 1, T.crm[0]); s.line(23, 4, 26, 1, T.crm[0]);
+      folha(s, 14, 33, 13, 5.5, 1.07); folha(s, 30, 33, 13, 5.5, -1.07, T.dgrn);
+      s.rEll(39, 42, 7, 3, -.3, VERDE_CLARO); [[35, 43], [39, 42], [43, 40]].forEach(([x, y]) => s.rect(x, y, 2, 1, VERDE_CLARO[2]));
+    }],
+    10900: ['Raízes de mandioca', s => {
+      folha(s, 16, 5, 6, 2.2, .4); folha(s, 32, 5, 6, 2.2, -.4); s.cap(24, 3, 24, 12, 2, 2.5, T.wood);
+      s.cap(22, 14, 8, 41, 5, 1.5, T.brn); s.cap(27, 14, 38, 35, 5, 4.2, T.brn); s.cap(24, 15, 24, 44, 5.5, 1.5, T.brn);
+      s.ell(39, 36, 3.6, 3.6, T.crm[2]); s.ell(39, 36, 1, 1, T.crm[0]);
+      [[18, 22], [13, 31], [23, 25], [24, 34], [31, 21], [33, 27]].forEach(([x, y]) => s.rect(x, y, 3, 1, T.brn[0]));
+    }],
+    15300: ['Ostra com pérola', s => {
+      s.sEll(24, 17, 17, 12, T.gry); for (let k = -3; k <= 3; k++) s.line(24 + k * 2, 27, 24 + k * 5, 8 + Math.abs(k) * 1.5, T.gry[0]);
+      s.sEll(24, 35, 19, 9, T.gry); s.ell(24, 32, 16, 6.5, T.fish[2]); s.ell(24, 33, 13, 4.5, '#f4d6e0');
+      s.sEll(24, 31, 4.5, 4.5, T.wht); s.rect(22, 29, 2, 2, '#ffffff');
+    }],
+    11000: ['Caixa de hortaliças', s => {
+      s.sEll(13, 19, 10, 9, T.grn); s.sEll(13, 20, 6, 5.5, VERDE_CLARO);
+      s.sEll(25, 8, 2, 5, T.grn); s.rEll(21, 10, 4, 1.8, .9, T.grn); s.rEll(29, 10, 4, 1.8, -.9, T.grn);
+      s.cap(25, 16, 25, 30, 4, 3, T.org); s.rect(23, 19, 3, 1, T.org[0]); s.rect(25, 23, 3, 1, T.org[0]);
+      s.sEll(37, 21, 7.5, 7, T.red); s.rect(35, 14, 5, 1, T.grn[1]); s.rect(37, 13, 1, 3, T.grn[0]);
+      s.sRect(4, 26, 40, 19, T.wood); s.rect(5, 32, 38, 1, T.wood[0]); s.rect(5, 38, 38, 1, T.wood[0]); s.rect(9, 27, 1, 17, T.wood[0]); s.rect(38, 27, 1, 17, T.wood[0]);
+    }],
+    14200: ['Galinha e ovo', s => {
+      [18, 25].forEach(x => { s.rect(x, 37, 2, 7, T.yel[0]); s.rect(x - 1, 44, 5, 1, T.yel[0]); });
+      s.rEll(8, 21, 8, 4, 1, T.lea); s.ell(32, 8, 2, 2.2, T.red[1]); s.ell(35, 7, 2, 2.5, T.red[1]); s.ell(37, 9, 1.6, 2, T.red[1]);
+      s.cap(30, 26, 34, 15, 6, 5, T.ter); s.sEll(21, 28, 13, 10, T.ter); s.sEll(34, 14, 5.5, 5.5, T.ter);
+      s.poly([[39, 13], [45, 15.5], [39, 18]], T.yel[1]); s.ell(38, 20, 1.5, 2.5, T.red[1]); s.rect(35, 13, 2, 2, OL);
+      s.rEll(19, 28, 8, 5, .25, T.lea); s.sEll(41, 40, 4, 5, T.crm);
+    }],
+    14000: ['Abóbora', s => {
+      folha(s, 35, 12, 6, 3.5, -.3); s.line(21, 14, 16, 10, T.grn[1]); s.line(16, 10, 13, 13, T.grn[1]);
+      s.sEll(9, 31, 7, 11, T.org); s.sEll(39, 31, 7, 11, T.org); s.sEll(16, 31, 8, 13, T.org); s.sEll(32, 31, 8, 13, T.org); s.sEll(24, 31, 7, 14, T.org);
+      s.cap(24, 18, 27, 9, 2.5, 2, T.dgrn);
+    }],
+    14800: ['Palmeira', s => {
+      for (let y = 18; y < 45; y++) { s.rect(22, y, 5, 1, y % 4 ? T.jute[1] : T.jute[0]); s.set(22, y, T.jute[2]); s.set(26, y, T.jute[0]); }
+      s.rect(20, 44, 9, 2, T.jute[0]);
+      const frond = (dx, sobe, cai) => { for (let i = 0; i <= 50; i++) { const t = i / 50, x = 24 + dx * t, y = 16 - sobe * 4 * t * (1 - t) + cai * t * t; if (i % 4 == 0) s.line(x, y, x - Math.sign(dx), y + 6 - 4 * t, T.grn[0]); s.ell(x, y, 1.5, 2.6 - t * 1.4, T.grn[1]); s.set(x, y - 2 + t, T.grn[2]); } };
+      frond(-21, 8, 16); frond(21, 8, 16); frond(-19, 12, 2); frond(19, 12, 2); frond(-9, 6, -10); frond(9, 6, -10);
+      [[20, 19], [24, 21], [28, 19]].forEach(([x, y]) => s.sEll(x, y, 2.3, 2.3, T.org));
+    }],
+    10300: ['Boi', s => {
+      s.cap(14, 16, 6, 12, 3, 2.2, T.crm); s.cap(6, 12, 5, 4, 2.2, 1, T.crm); s.cap(34, 16, 42, 12, 3, 2.2, T.crm); s.cap(42, 12, 43, 4, 2.2, 1, T.crm);
+      s.rEll(8, 23, 5, 2.8, .25, T.lea); s.rEll(40, 23, 5, 2.8, -.25, T.lea);
+      s.sEll(24, 26, 12, 13, T.lea); s.ell(24, 14, 6, 3, T.lea[0]);
+      s.sEll(24, 38, 9, 6, T.crm); s.rect(20, 38, 2, 2, T.brn[0]); s.rect(27, 38, 2, 2, T.brn[0]);
+      s.rect(17, 24, 2, 3, OL); s.rect(29, 24, 2, 3, OL); s.set(17, 24, T.wht[2]); s.set(29, 24, T.wht[2]);
+    }],
+    10800: ['Latão de leite', s => {
+      [[7, 9], [40, 39]].forEach(([a, b]) => { s.rect(a, 24, 4, 2, T.mtl[0]); s.rect(b - 2 + (a < 24 ? 0 : 3), 24, 2, 9, T.mtl[0]); s.rect(a, 32, 4, 2, T.mtl[0]); });
+      colunas(s, 12, 45, u => u < .2 ? 8 + u * 25 : 13, T.mtl); s.rect(11, 22, 27, 1, T.mtl[0]); s.rect(11, 41, 27, 1, T.mtl[0]);
+      s.sRect(16, 7, 17, 5, T.mtl); s.sEll(24, 6, 10, 2.5, T.mtl); s.sRect(21, 2, 7, 3, T.mtl);
+      s.poly([[24, 25], [20, 33], [28.5, 33]], T.wht[2]); s.ell(24, 34, 4.2, 4, T.wht[2]); s.rect(25, 35, 2, 2, T.wht[1]);
+    }],
+    10150: ['Peixe no anzol', s => {
+      s.line(40, 1, 40, 20, T.mus[0]); s.sEll(40, 9, 3.2, 3.6, T.red); s.rect(38, 6, 5, 2, T.wht[2]);
+      peixe(s, 21, 31, 15, 8, -.3, T.fish); [[17, 30], [21, 33], [24, 28], [13, 33]].forEach(([x, y]) => s.set(x, y, T.fish[0]));
+      s.line(40, 20, 39, 24, T.mtl[0]); s.line(39, 24, 36, 25, T.mtl[0]);
+    }],
+    10100: ['Tanque de peixes', s => {
+      peixe(s, 26, 11, 8, 4.5, -.6, T.org); [[13, 18], [16, 14], [36, 17]].forEach(([x, y]) => s.rect(x, y, 1, 2, T.blu[2]));
+      s.sRect(5, 23, 38, 21, T.blu); s.rect(8, 28, 6, 1, T.blu[2]); s.rect(22, 27, 7, 1, T.blu[2]); s.rect(33, 29, 6, 1, T.blu[2]);
+      peixe(s, 16, 35, 6, 3, 0, T.org); peixe(s, 31, 39, 6, 3, Math.PI, T.org);
+      s.sRect(3, 20, 42, 4, T.wood); s.sRect(3, 23, 3, 22, T.wood); s.sRect(42, 23, 3, 22, T.wood); s.sRect(3, 43, 42, 3, T.wood);
+    }],
+    11200: ['Vaso de ervas', s => {
+      s.line(24, 28, 24, 10, T.dgrn[1]); s.line(18, 28, 11, 14, T.dgrn[1]); s.line(30, 28, 38, 10, T.dgrn[1]);
+      [[20, 22, .5], [28, 20, -.5], [20, 15, .5], [28, 13, -.5]].forEach(([x, y, a]) => folha(s, x, y, 4.5, 2.3, a));
+      s.sEll(24, 8, 2.5, 3.5, T.grn); folha(s, 9, 22, 4.5, 2.2, .3, T.dgrn); folha(s, 8, 14, 4.5, 2.2, .9, T.dgrn); folha(s, 15, 12, 4, 2, -.9, T.dgrn);
+      for (let i = 0; i < 6; i++) s.ell(39 - i * .9, 5 + i * 2.6, i ? 2.2 : 1.4, 1.6, i % 2 ? '#a77bd0' : '#7d55b0');
+      s.poly([[11, 31], [37, 31], [34, 46], [14, 46]], T.ter[1]); s.poly([[31, 31], [37, 31], [34, 46], [30, 46]], T.ter[0]); s.poly([[11, 31], [15, 31], [17, 46], [14, 46]], T.ter[2]);
+      s.sRect(9, 27, 30, 5, T.ter);
+    }],
+    11400: ['Casulos e bicho-da-seda', s => {
+      s.cap(41, 25, 46, 21, 1.3, 1, T.brn); folha(s, 23, 30, 20, 12, -.2);
+      [[14, 31, 10, 25], [22, 30, 19, 22], [30, 28, 28, 20], [18, 33, 20, 40], [27, 31, 30, 38]].forEach(([a, b, c, d]) => s.line(a, b, c, d, T.grn[0]));
+      s.rEll(15, 24, 7.5, 5, -.3, OL); s.rEll(30, 22, 7.5, 5, .2, OL); s.rEll(15, 24, 6.5, 4, -.3, T.crm); s.rEll(30, 22, 6.5, 4, .2, T.wht);
+      const lag = [[13, 37], [17, 38], [21, 38], [25, 37], [29, 36]]; lag.forEach(([x, y]) => s.ell(x, y, 3.6, 3.6, OL)); s.ell(33, 35, 3, 3, OL); lag.forEach(([x, y]) => { s.sEll(x, y, 2.6, 2.6, T.wht); s.rect(x + 2, y - 1, 1, 3, T.wht[0]); }); s.ell(33, 35, 2, 2, T.brn[1]);
+    }],
+    11100: ['Mala de viagem e chapéu de palha', s => {
+      s.rect(11, 12, 10, 2, T.brn[0]); s.rect(11, 12, 2, 6, T.brn[0]); s.rect(19, 12, 2, 6, T.brn[0]);
+      s.sRect(5, 18, 38, 27, T.lea); s.rect(12, 19, 3, 25, T.brn[0]); s.rect(33, 19, 3, 25, T.brn[0]); s.rect(12, 26, 3, 3, T.yel[1]); s.rect(33, 26, 3, 3, T.yel[1]);
+      [[5, 18], [40, 18], [5, 42], [40, 42]].forEach(([x, y]) => s.rect(x, y, 3, 3, T.yel[0]));
+      s.sRect(18, 24, 9, 7, T.blu); s.sEll(27, 37, 4, 4, T.yel); s.sRect(17, 34, 6, 5, T.grn);
+      s.sEll(34, 11, 6, 5.5, T.yel); s.rect(28, 13, 13, 2, T.red[1]); s.sEll(34, 17, 12, 3, T.yel);
+    }],
+    _: ['Caixote de mantimentos', s => {
+      s.sEll(15, 17, 8, 7, T.jute); s.sEll(32, 17, 8, 7, T.grn);
+      s.sRect(4, 22, 40, 23, T.wood); s.rect(5, 29, 38, 1, T.wood[0]); s.rect(5, 37, 38, 1, T.wood[0]); s.rect(9, 23, 1, 21, T.wood[0]); s.rect(38, 23, 1, 21, T.wood[0]);
+    }]
   };
   const FERR = {
-    11600: s => { s.line(8, 10, 10, 5, T.grn[0]); s.line(10, 5, 14, 5, T.grn[0]); s.line(14, 5, 16, 10, T.grn[0]); s.sRect(7, 10, 10, 9, T.grn); s.line(17, 13, 21, 8, T.grn[1]); s.line(17, 14, 21, 9, T.grn[0]); s.rect(20, 6, 2, 3, T.grn[2]); s.set(22, 11, T.blu[2]); s.set(21, 13, T.blu[2]); s.line(4, 21, 4, 17, T.grn[1]); s.set(3, 16, T.grn[2]); s.set(5, 16, T.grn[2]); },
-    10000: s => { [[10, 8], [11, 7], [10, 6], [11, 5], [14, 8], [15, 7], [14, 6]].forEach(([x, y]) => s.set(x, y, T.wht[1])); s.sEll(12, 16, 9, 5, T.cop); s.ell(12, 12, 9, 2, T.cop[0]); s.ell(12, 12, 7, 1.4, T.yel[1]); s.rect(2, 13, 2, 2, T.cop[0]); s.rect(20, 13, 2, 2, T.cop[0]); s.line(6, 20, 5, 22, T.mtl[0]); s.line(18, 20, 19, 22, T.mtl[0]); },
-    10010: s => { s.sEll(12, 12, 9, 9, T.jute); s.ell(12, 12, 4.5, 4.5, null); for (let a = 0; a < 6.3; a += .5) s.set(12 + Math.cos(a) * 7, 12 + Math.sin(a) * 7, T.jute[0]); s.line(19, 17, 22, 22, T.jute[1]); },
-    10020: s => { for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; s.line(12, 12, 12 + Math.cos(a) * 10, 12 + Math.sin(a) * 10, T.wood[0]); s.ell(12 + Math.cos(a) * 10, 12 + Math.sin(a) * 10, 1.2, 1.2, T.wood[2]); } for (let a = 0; a < 6.3; a += .08) { s.set(12 + Math.cos(a) * 7, 12 + Math.sin(a) * 7, T.wood[1]); s.set(12 + Math.cos(a) * 6, 12 + Math.sin(a) * 6, T.wood[2]); } s.sEll(12, 12, 2, 2, T.yel); },
-    12100: s => { s.sRect(3, 11, 18, 10, T.wood); s.sRect(3, 6, 18, 6, T.wood); s.set(3, 6, null); s.set(20, 6, null); s.rect(3, 11, 18, 1, T.yel[0]); s.rect(6, 6, 2, 15, T.yel[1]); s.rect(16, 6, 2, 15, T.yel[1]); s.rect(11, 10, 2, 3, T.yel[2]); s.sEll(9, 4, 2, 1, T.yel); s.sEll(14, 3, 2, 1, T.yel); },
-    15406: s => { s.sRect(4, 6, 16, 13, T.crm); s.sEll(4, 5, 1.6, 2, T.crm); s.sEll(19, 5, 1.6, 2, T.crm); s.rect(4, 4, 16, 2, T.crm[2]); [9, 12, 15].forEach(y => s.rect(6, y, 10, 1, T.crm[0])); s.sEll(16, 17, 3, 3, T.red); s.line(15, 19, 14, 22, T.red[1]); s.line(17, 19, 18, 22, T.red[1]); },
-    15200: s => { s.rect(3, 8, 18, 10, T.mtl[0]); for (let x = 4; x < 20; x += 4) for (let y = 9; y < 17; y += 3) { s.rect(x, y, 3, 2, T.blu[1]); s.set(x, y, T.blu[2]); } s.line(12, 18, 12, 21, T.mtl[1]); s.rect(8, 22, 9, 1, T.mtl[0]); s.set(20, 3, T.yel[2]); s.set(19, 3, T.yel[1]); s.set(21, 3, T.yel[1]); s.set(20, 2, T.yel[1]); s.set(20, 4, T.yel[1]); },
-    14950: s => { s.rect(11, 2, 2, 3, T.yel[0]); for (let y = 5; y < 18; y++) { const w = 3 + (y - 5) * .45 + (y > 15 ? 2 : 0); for (let x = Math.round(12 - w); x <= 12 + w; x++) s.set(x, y, x < 11 ? T.yel[2] : x > 14 ? T.yel[0] : T.yel[1]); } s.rect(4, 18, 16, 2, T.yel[0]); s.ell(12, 21, 1.5, 1.5, T.yel[0]); },
-    14700: s => { for (let y = 6; y < 22; y++) { const w = 6 + 1.6 * Math.sin(Math.PI * (y - 6) / 15); for (let x = Math.round(12 - w); x <= 12 + w; x++) s.set(x, y, x < 9 ? T.wood[2] : x > 15 ? T.wood[0] : T.wood[1]); } s.rect(5, 8, 15, 1, T.mtl[1]); s.rect(5, 19, 15, 1, T.mtl[1]); s.ell(12, 6, 6, 1.2, T.blu[2]); s.ell(12, 14, 2.6, 1.6, T.grn[2]); s.line(10, 14, 14, 14, T.grn[0]); s.set(12, 2, T.blu[2]); s.set(12, 3, T.blu[1]); },
-    10002: s => { for (let x = 3; x <= 20; x++) { const r = .8 + Math.pow((x - 3) / 17, 2.5) * 6, cy = 15 - (x - 3) * .3; for (let y = Math.round(cy - r); y <= cy + r; y++) s.set(x, y, y < cy - r / 3 ? T.yel[2] : y > cy + r / 3 ? T.yel[0] : T.yel[1]); } s.rect(21, 4, 2, 13, T.yel[0]); s.line(10, 14, 10, 19, T.red[1]); s.set(10, 20, T.red[2]); },
-    _: s => { s.sRect(3, 10, 18, 10, T.red); s.rect(3, 13, 18, 1, T.red[0]); s.rect(9, 6, 6, 1, T.mtl[0]); s.rect(9, 6, 1, 4, T.mtl[0]); s.rect(14, 6, 1, 4, T.mtl[0]); s.rect(10, 14, 4, 2, T.mtl[2]); }
+    11600: ['Regador e muda', s => {
+      for (let a = 1.57; a < 4.72; a += .05) s.rect(9 + Math.cos(a) * 6, 30 + Math.sin(a) * 8, 2, 2, T.grn[0]);
+      s.cap(27, 35, 40, 16, 2.4, 1.7, T.grn); s.rEll(41, 14, 4.5, 2.5, .6, T.grn);
+      s.sRect(8, 20, 20, 23, T.grn); s.ell(18, 20, 10, 2.5, T.grn[0]); s.rect(9, 30, 18, 1, T.grn[0]);
+      [[44, 19], [41, 23], [45, 25], [42, 28]].forEach(([x, y]) => s.rect(x, y, 1, 2, T.blu[1]));
+      s.ell(40, 45, 6, 2, T.brn[1]); s.line(40, 43, 40, 35, T.grn[1]); folha(s, 36, 34, 4, 2.2, .5, VERDE_CLARO); folha(s, 44, 34, 4, 2.2, -.5, VERDE_CLARO);
+    }],
+    10000: ['Tacho de cobre', s => {
+      for (let y = 3; y < 16; y++) { s.rect(14 + Math.round(Math.sin(y * .9) * 1.5), y, 2, 1, T.wht[1]); s.rect(22 + Math.round(Math.sin(y * .9 + 2) * 1.5), y, 2, 1, T.wht[1]); }
+      s.rect(11, 41, 3, 5, T.mtl[0]); s.rect(34, 41, 3, 5, T.mtl[0]); s.rect(2, 24, 5, 3, T.cop[0]); s.rect(41, 24, 5, 3, T.cop[0]);
+      s.sEll(24, 31, 18, 12, T.cop); s.ell(24, 24, 18, 5, T.cop[0]); s.ell(24, 24, 15, 3.4, T.org[1]); s.rect(15, 23, 6, 1, T.org[2]);
+      s.cap(28, 24, 41, 6, 1.4, 1.4, T.wood);
+    }],
+    10010: ['Boia salva-vidas', s => {
+      s.sEll(24, 24, 20, 20, T.wht);
+      for (let y = 3; y < 46; y++) for (let x = 3; x < 46; x++) { const i = T.wht.indexOf(s.get(x, y)); if (i >= 0 && Math.floor((Math.atan2(y - 24, x - 24) + Math.PI) / (Math.PI / 4)) % 2 == 0) s.set(x, y, T.red[i]); }
+      s.ell(24, 24, 9, 9, null);
+    }],
+    10020: ['Timão', s => {
+      for (let k = 0; k < 8; k++) { const c = Math.cos(k * Math.PI / 4), n = Math.sin(k * Math.PI / 4); s.cap(24, 24, 24 + c * 19, 24 + n * 19, 1.5, 1.5, T.wood); s.sEll(24 + c * 19.5, 24 + n * 19.5, 2.4, 2.4, T.wood); }
+      for (let y = 8; y < 41; y++) for (let x = 8; x < 41; x++) { const d = Math.hypot(x - 24, y - 24); if (d < 10 || d > 14.5) continue; const v = -((x - 24) * .6 + (y - 24) * .8) / d * (d > 12.2 ? 1 : -1); s.set(x, y, v > .4 ? T.wood[2] : v < -.3 ? T.wood[0] : T.wood[1]); }
+      s.sEll(24, 24, 4.5, 4.5, T.yel); s.rect(23, 23, 2, 2, T.yel[0]);
+    }],
+    12100: ['Baú de moedas', s => {
+      s.sEll(24, 15, 19, 12, T.wood); s.ell(24, 16, 16, 9, T.brn[0]);
+      [[13, 19], [19, 15], [27, 16], [34, 19], [23, 19], [31, 14], [16, 15], [24, 12]].forEach(([x, y]) => { s.sEll(x, y, 3.3, 3.3, T.yel); s.set(x, y, T.yel[0]); });
+      s.sRect(5, 22, 38, 23, T.wood); s.rect(6, 33, 36, 1, T.wood[0]); s.rect(5, 22, 38, 2, T.yel[0]); s.rect(10, 22, 3, 23, T.yel[1]); s.rect(35, 22, 3, 23, T.yel[1]);
+      s.sRect(21, 26, 6, 7, T.yel); s.rect(23, 29, 2, 2, OL);
+    }],
+    15406: ['Bandeira verde e branca', s => {
+      s.sRect(4, 44, 11, 3, T.gry); s.sRect(8, 4, 3, 41, T.wood); s.sEll(9, 3, 2.5, 2.5, T.yel);
+      for (let x = 11; x < 45; x++) { const o = Math.round(Math.sin((x - 11) / 34 * 6.28) * 2); for (let y = 7; y < 28; y++) { const d = (y - 7) * 1.6 - (x - 11); s.set(x, y + o, d > -8 && d < 3 ? T.wht[2] : y < 9 ? T.grn[2] : y > 25 ? T.grn[0] : T.grn[1]); } }
+      s.sEll(28, 17, 5, 5, T.blu);
+    }],
+    15200: ['Painel solar', s => {
+      for (let k = 0; k < 8; k++) { const c = Math.cos(k * Math.PI / 4), n = Math.sin(k * Math.PI / 4); s.line(38 + c * 7, 9 + n * 7, 38 + c * 8.6, 9 + n * 8.6, T.yel[1]); }
+      s.sEll(38, 9, 5, 5, T.yel); s.rect(19, 39, 3, 5, T.mtl[1]); s.sRect(11, 43, 19, 3, T.mtl); s.rect(3, 19, 35, 21, T.mtl[0]);
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) { const x = 5 + i * 8, y = 21 + j * 6; s.rect(x, y, 7, 5, T.blu[1]); s.rect(x, y, 7, 1, T.blu[2]); s.rect(x, y, 1, 5, T.blu[2]); s.rect(x + 6, y + 1, 1, 4, T.blu[0]); }
+    }],
+    14950: ['Sino', s => {
+      s.ell(24, 5, 3.6, 3.6, T.yel[0]); s.ell(24, 5, 1.4, 1.4, null); s.sEll(24, 42, 3.5, 3.5, [T.yel[0], T.yel[0], T.yel[1]]);
+      colunas(s, 8, 36, u => 6 + u * 7 + Math.pow(u, 6) * 6, T.yel); s.rect(13, 28, 23, 1, T.yel[0]); s.sEll(24, 36, 20, 3, T.yel);
+    }],
+    14700: ['Barril de água', s => {
+      colunas(s, 12, 46, u => 13 + 3 * Math.sin(Math.PI * u), T.wood);
+      [17, 24, 31].forEach(x => s.rect(x, 13, 1, 32, T.wood[0]));
+      [17, 18, 39, 40].forEach(y => { for (let x = 0; x < 48; x++) if (s.get(x, y)) s.set(x, y, x < 16 ? T.mtl[2] : x > 31 ? T.mtl[0] : T.mtl[1]); });
+      s.ell(24, 12, 13, 3.5, T.blu[1]); s.rect(16, 11, 7, 1, T.blu[2]); s.poly([[24, 1], [21, 6], [27.5, 6]], T.blu[2]); s.ell(24, 7, 3.2, 3, T.blu[2]);
+      folha(s, 24, 29, 6.5, 3.8, -.7, VERDE_CLARO);
+    }],
+    10002: ['Megafone', s => {
+      s.sRect(16, 26, 5, 16, T.red); s.sRect(5, 20, 8, 8, T.red);
+      for (let x = 12; x <= 39; x++) { const u = (x - 12) / 27, r = 3 + u * 2 + u * u * 13, cy = 24 - u * 4; for (let y = Math.round(cy - r); y <= cy + r; y++) s.set(x, y, y < cy - r / 3 ? T.yel[2] : y > cy + r / 3 ? T.yel[0] : T.yel[1]); }
+      s.ell(41, 20, 3.5, 18.5, T.yel[0]); s.ell(41, 20, 2, 16, T.brn[0]);
+    }],
+    _: ['Caixa de ferramentas', s => {
+      s.rect(16, 10, 16, 3, T.mtl[0]); s.rect(16, 10, 3, 10, T.mtl[0]); s.rect(29, 10, 3, 10, T.mtl[0]);
+      s.sRect(4, 20, 40, 25, T.red); s.rect(5, 28, 38, 2, T.red[0]); s.sRect(20, 26, 8, 6, T.mtl);
+    }]
   };
+  // Placas das barracas na cena: desenhos pequenos (24x24), no tamanho natural da cena.
+  const PLACA_CADEIA = spr24(s => { s.sEll(12, 15, 8, 7, T.jute); s.sRect(8, 6, 8, 4, T.jute); s.rect(8, 9, 8, 1, T.brn[1]); [[9, 5], [12, 4], [15, 5], [11, 6], [14, 6]].forEach(([x, y]) => { s.ell(x, y, 1.3, 1, T.red[1]); s.set(x - 1, y - 1, T.red[2]); }); s.rect(10, 14, 4, 3, T.jute[0]); });
+  const PLACA_AREA = spr24(s => { for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; s.line(12, 12, 12 + Math.cos(a) * 10, 12 + Math.sin(a) * 10, T.wood[0]); s.ell(12 + Math.cos(a) * 10, 12 + Math.sin(a) * 10, 1.2, 1.2, T.wood[2]); } for (let a = 0; a < 6.3; a += .08) { s.set(12 + Math.cos(a) * 7, 12 + Math.sin(a) * 7, T.wood[1]); s.set(12 + Math.cos(a) * 6, 12 + Math.sin(a) * 6, T.wood[2]); } s.sEll(12, 12, 2, 2, T.yel); });
   const MAPA = spr24(s => { s.sRect(2, 4, 20, 16, T.crm); s.sEll(2, 12, 1.5, 8, T.crm); s.sEll(21, 12, 1.5, 8, T.crm); s.ell(8, 9, 4, 3, T.grn[2]); s.ell(16, 15, 4, 3, T.grn[2]); for (let x = 3; x < 21; x++) s.set(x, 12 + Math.round(Math.sin(x * .6) * 2), T.blu[1]); [[7, 8], [10, 10], [15, 14], [17, 16], [13, 7]].forEach(([x, y]) => s.set(x, y, T.red[1])); });
   const BANDEIRAS = spr24(s => { s.line(2, 4, 22, 4, T.brn[1]); for (let i = 0; i < 5; i++) { const x = 3 + i * 4, c = PUB_CORES[i * 2]; s.rect(x, 5, 3, 3, c); s.rect(x + 1, 8, 1, 2, c); } s.rect(1, 3, 1, 18, T.wood[0]); s.rect(22, 3, 1, 18, T.wood[0]); });
   const iconeCache = {};
+  const desenhoDe = item => { const tab = item.tipo === 'transversal' ? FERR : MANT; return tab[item.codigo] || tab._; };
+  const objeto = item => desenhoDe(item)[0];
   function icone(item) {
     const k = (item.tipo || 'cadeia') + item.codigo;
-    if (!iconeCache[k]) { const tab = item.tipo === 'transversal' ? FERR : MANT; iconeCache[k] = spr24(tab[item.codigo] || tab._); }
+    if (!iconeCache[k]) iconeCache[k] = spr48(desenhoDe(item)[1]);
     return iconeCache[k];
   }
   function crewSpr(skin, shirt) { // extensionista sentado, de frente: chapéu de palha, rosto, camisa
@@ -479,7 +684,7 @@ window.RIO = (function () {
     const nCarga = Math.min(spec.carga, st >= 2 ? 6 : 3);
     for (let i = 0; i < nCarga; i++) { const x = g.at(.2 + i * .09); if (i % 2) box3(s, x - 3, CY - 5, 6, 3, 3, T.wood, T.wood); else s.sEll(x, CY - 2, 3, 2.5, T.jute); }
     const tapado = []; // trechos do convés (x) cobertos por cabine, toldo, painel, timão ou sino: ali ninguém senta
-    if (tem('10010')) { const x = g.at(.86), y = Math.round(CY + g.half(.86)) + 3; s.ell(x, y, 2.2, 2.2, T.jute[1]); s.set(x, y, T.wood[0]); }
+    if (tem('10010')) { const x = g.at(.86), y = Math.round(CY + g.half(.86)) + 3; s.ell(x, y, 2.2, 2.2, T.red[1]); s.set(x, y - 2, T.wht[2]); s.set(x, y + 2, T.wht[2]); s.set(x, y, T.wood[0]); }
     if (st === 2 || st === 3) { // toldo listrado sobre postes; painel solar no teto, se houver
       const a = g.at(st === 3 ? .6 : .5), b = g.at(st === 3 ? .84 : .8), Hh = 10, hw = Math.round(g.half((a - g.x0 + (b - a) / 2) / h.L));
       [a, b].forEach(px => s.rect(px, CY + hw - Hh, 1, Hh, T.wood[0])); tapado.push([a, b]);
@@ -493,7 +698,7 @@ window.RIO = (function () {
     if (poste) { const px = g.bow - 2; s.rect(px, CY - 13, 1, 13, T.wood[0]); s.rect(px, CY - 14, 4, 1, T.wood[0]); if (st >= 2) s.sRect(px + 2, CY - 13, 3, 4, T.yel); }
     if (tem('14950')) { const x = g.bow - 8; tapado.push([x - 2, x + 2]); s.rect(x, CY - 8, 1, 8, T.wood[0]); s.rect(x - 2, CY - 9, 5, 1, T.wood[0]); s.sEll(x, CY - 10, 2, 2.5, T.yel); }
     if (tem('10002')) { const x = g.bow + 1; for (let i = 0; i < 6; i++) s.rect(x + i, CY - 4 - Math.floor(i / 2), 1, 1 + Math.floor(i / 2) * 2, i > 3 ? T.yel[2] : T.yel[1]); }
-    if (tem('15406') || (spec.cores.length && st < 3)) { const x = g.x0 + 5; s.rect(x, CY - 18, 1, 18, T.wood[0]); if (tem('15406')) { s.rect(x + 1, CY - 18, 7, 5, T.blu[1]); s.rect(x + 1, CY - 16, 7, 1, T.wht[2]); s.set(x + 4, CY - 17, T.yel[2]); } }
+    if (tem('15406') || (spec.cores.length && st < 3)) { const x = g.x0 + 5; s.rect(x, CY - 18, 1, 18, T.wood[0]); if (tem('15406')) { s.rect(x + 1, CY - 18, 7, 5, T.grn[1]); s.line(x + 2, CY - 14, x + 6, CY - 18, T.wht[2]); s.set(x + 4, CY - 16, T.blu[1]); } }
     if (tem('10020')) { const x = st === 4 ? g.at(.43) : g.at(.14), y = CY - 7; tapado.push([x - 4, x + 4]); s.rect(x, y, 1, 7, T.wood[0]); for (let a = 0; a < 6.3; a += .4) s.set(x + Math.cos(a) * 4, y + Math.sin(a) * 4, T.wood[1]); s.line(x - 4, y, x + 4, y, T.wood[0]); s.line(x, y - 4, x, y + 4, T.wood[0]); s.set(x, y, T.yel[2]); }
     let topoMastro = null;
     if (st === 4) { // cabine na popa
@@ -619,8 +824,8 @@ window.RIO = (function () {
   // Margem de baixo: escritório (equipe), quatro barracas e o trapiche. x em pixels lógicos.
   const ESTRUTURAS = [
     { x: 2, y: 146, w: 74, h: 62, aba: 'tecnico', rotulo: 'Equipe', dica: 'Escritório do IDR-Paraná: a equipe de extensionistas. Clique para escolher quem embarca.' },
-    { x: 80, y: 160, w: 44, h: 46, aba: 'cadeia', rotulo: 'Cadeias', dica: 'Barraca de mantimentos: cadeias produtivas. Clique para ver as opções.', cor: T.yel, ic: () => icone({ codigo: '10200' }) },
-    { x: 126, y: 160, w: 44, h: 46, aba: 'transversal', rotulo: 'Áreas', dica: 'Barraca de ferramentas: áreas transversais. Cada ferramenta vira um acessório da canoa.', cor: T.red, ic: () => icone({ codigo: '10020', tipo: 'transversal' }) },
+    { x: 80, y: 160, w: 44, h: 46, aba: 'cadeia', rotulo: 'Cadeias', dica: 'Barraca de mantimentos: cadeias produtivas. Clique para ver as opções.', cor: T.yel, ic: () => PLACA_CADEIA },
+    { x: 126, y: 160, w: 44, h: 46, aba: 'transversal', rotulo: 'Áreas', dica: 'Barraca de ferramentas: áreas transversais. Cada ferramenta vira um acessório da canoa.', cor: T.red, ic: () => PLACA_AREA },
     { x: 172, y: 160, w: 44, h: 46, aba: 'publico', rotulo: 'Público', dica: 'Barraca das bandeirolas: público. Cada público é uma bandeirola no barco.', cor: T.blu, ic: () => BANDEIRAS },
     { x: 218, y: 160, w: 44, h: 46, aba: 'municipio', rotulo: 'Municípios', dica: 'Barraca dos mapas: território. Clique para escolher os municípios.', cor: T.grn, ic: () => MAPA },
     { x: 266, y: 118, w: 30, h: 52, aba: null, rotulo: '', dica: 'Trapiche: quando o arranjo tem cadeia ou área, municípios e equipe, a canoa entra no rio.' }
@@ -949,7 +1154,7 @@ window.RIO = (function () {
   return {
     ligado: () => modo === 'rio',
     definir(m) { modo = m; try { localStorage.setItem(CHAVE, m); } catch (e) { /* ok */ } document.body.classList.toggle('modo-rio', m === 'rio'); },
-    LOGO, icone, crew: () => CREW_C[0], corPublico: i => PUB_CORES[i % PUB_CORES.length],
+    LOGO, icone, objeto, crew: () => CREW_C[0], corPublico: i => PUB_CORES[i % PUB_CORES.length],
     estagio: zonas => ESTAGIO[zonas], cena, fundoEntrada, painel
   };
 })();
@@ -1310,7 +1515,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
       var item = itemDe(tipo, codigo);
       var deFora = tipo === 'tecnico' && item.codigo && !daMinhaRegional(item);
       var ch = el('span', { class: 'chip t-' + tipo + (item.tipo ? ' ' + item.tipo : '') + (deFora ? ' fora' : ''),
-        title: tipo === 'tecnico' ? detalheTecnico(item) : (RIO.ligado() ? rotulo + ': ' + nomeDe(tipo, codigo) : '') }, [nomeDe(tipo, codigo)]);
+        title: tipo === 'tecnico' ? detalheTecnico(item) : (RIO.ligado() ? rotulo + ': ' + nomeDe(tipo, codigo) + (tipo === 'projeto' ? '\nSímbolo: ' + RIO.objeto(item) : '') : '') }, [nomeDe(tipo, codigo)]);
       if (!travado) ch.appendChild(el('button', { 'aria-label': 'Remover', text: '×', onclick: function (ev) {
         ev.stopPropagation(); cod.splice(cod.indexOf(codigo), 1); alterou(a);
       } }));
@@ -1326,9 +1531,10 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     if (desenho) {
       var cv = el('canvas', { width: desenho.width, height: desenho.height, class: tipo === 'tecnico' ? 'eq' : '' });
       cv.getContext('2d').drawImage(desenho, 0, 0); n.insertBefore(cv, n.firstChild);
+      if (tipo === 'projeto') { cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', RIO.objeto(item)); }
     }
     if (tipo === 'publico') { var cor = el('span', { class: 'cor' }); cor.style.background = RIO.corPublico(catalogo('publico').indexOf(item)); n.insertBefore(cor, n.firstChild); }
-    n.title = item.nome + (sub ? '\n' + sub : '') + '\nArraste até uma canoa, ou clique para embarcar na canoa selecionada.';
+    n.title = item.nome + (tipo === 'projeto' ? '\nSímbolo: ' + RIO.objeto(item) : '') + (sub ? '\n' + sub : '') + '\nArraste até uma canoa, ou clique para embarcar na canoa selecionada.';
   }
 
   function faltaDe(a) {
