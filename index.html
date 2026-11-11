@@ -479,10 +479,13 @@ window.RIO = (function () {
       s.poly([[39, 13], [45, 15.5], [39, 18]], T.yel[1]); s.ell(38, 20, 1.5, 2.5, T.red[1]); s.rect(35, 13, 2, 2, OL);
       s.rEll(19, 28, 8, 5, .25, T.lea); s.sEll(41, 40, 4, 5, T.crm);
     }],
-    14000: ['Abóbora', s => {
-      folha(s, 35, 12, 6, 3.5, -.3); s.line(21, 14, 16, 10, T.grn[1]); s.line(16, 10, 13, 13, T.grn[1]);
-      s.sEll(9, 31, 7, 11, T.org); s.sEll(39, 31, 7, 11, T.org); s.sEll(16, 31, 8, 13, T.org); s.sEll(32, 31, 8, 13, T.org); s.sEll(24, 31, 7, 14, T.org);
-      s.cap(24, 18, 27, 9, 2.5, 2, T.dgrn);
+    14000: ['Cogumelo shiitake', s => {
+      s.sEll(21, 24, 19, 14, T.lea); s.rect(0, 26, 48, 22, null); s.sEll(39, 35, 7.5, 6, T.lea); s.rect(30, 37, 18, 11, null);
+      [[12, 17], [19, 13], [26, 16], [31, 20], [16, 21], [23, 20], [8, 22], [27, 12]].forEach(([x, y]) => { s.rect(x, y, 3, 2, T.crm[1]); s.set(x, y, T.crm[2]); });
+      [[36, 32], [41, 33], [39, 30]].forEach(([x, y]) => s.rect(x, y, 2, 1, T.crm[1]));
+      s.cap(21, 28, 22, 43, 4, 5, T.crm); s.cap(39, 38, 39, 44, 2, 2.5, T.crm);
+      s.ell(21, 26, 18, 3.5, T.crm[1]); for (let k = -5; k <= 5; k++) s.line(21 + k * 3.2, 24, 21 + k * 2.6, 28, T.crm[0]);
+      s.ell(39, 37, 7, 1.6, T.crm[1]); [35, 38, 41, 44].forEach(x => s.set(x, 37, T.crm[0]));
     }],
     14800: ['Palmeira', s => {
       for (let y = 18; y < 45; y++) { s.rect(22, y, 5, 1, y % 4 ? T.jute[1] : T.jute[0]); s.set(22, y, T.jute[2]); s.set(26, y, T.jute[0]); }
