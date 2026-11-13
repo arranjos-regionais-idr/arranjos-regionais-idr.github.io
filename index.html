@@ -126,6 +126,13 @@
   .kpi { background: var(--branco); border: 1px solid var(--borda); border-radius: 10px; padding: 12px; }
   .kpi b { display: block; font-size: 24px; }
   .kpi span { color: var(--suave); font-size: 12px; }
+  .areas .campo-area { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0 12px; font-weight: 600; }
+  .areas .campo-area select { max-width: 100%; min-width: 240px; }
+  .areas h4 { margin: 16px 0 6px; }
+  .areas .rolavel { overflow-x: auto; }
+  .areas tr.clicavel { cursor: pointer; }
+  .areas tr.clicavel:hover, .areas tr.clicavel:focus { background: var(--verde-claro); outline: none; }
+  .areas tr.apagada td { color: var(--suave); }
   table { border-collapse: collapse; width: 100%; background: var(--branco); }
   th, td { border-bottom: 1px solid var(--borda); padding: 6px 8px; text-align: left; vertical-align: top; font-size: 13px; }
   th { background: var(--verde-claro); position: sticky; top: 0; }
@@ -1282,6 +1289,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
       sel.appendChild(el('option', { value: '', text: 'Selecione…' }));
       lista.forEach(function (r) { sel.appendChild(el('option', { value: r, text: r })); });
       sel.appendChild(el('option', { value: '__DEPLAN__', text: 'DEPLAN (painel estadual)' }));
+      sel.appendChild(el('option', { value: '__ASSESSORES__', text: 'Assessores estaduais (painel das áreas)' }));
     }).catch(function (e) { $('erroEntrada').textContent = e.message; });
     try {
       var salvo = JSON.parse(sessionStorage.getItem('arranjos_sessao') || 'null');
@@ -1305,6 +1313,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
   function entrarCom(s) {
     estado.token = s.token; estado.perfil = s.perfil; estado.regional = s.regional;
     if (s.perfil === 'deplan') { $('cabRegional').textContent = 'DEPLAN · painel estadual'; carregarPainel(); return; }
+    if (s.perfil === 'assessor') { $('cabRegional').textContent = 'Assessores estaduais · painel das áreas'; carregarAreas(); return; }
     $('cabRegional').textContent = 'Regional ' + s.regional;
     sinal('Carregando…');
     api('carregarRegional', s.token).then(function (d) {
@@ -1324,7 +1333,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
 
   function sair() {
     try { sessionStorage.removeItem('arranjos_sessao'); } catch (e) { /* ok */ }
-    estado.token = null; estado.ativo = null; estado.dados = null; estado.abertos = {}; $('cabRegional').textContent = ''; sinal('');
+    estado.token = null; estado.ativo = null; estado.dados = null; estado.abertos = {}; estado.painel = null; estado.areasTela = null; $('cabRegional').textContent = ''; sinal('');
     $('avisoPrazo').classList.add('oculto');
     mostrar('telaEntrada');
   }
@@ -1721,6 +1730,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     RIO.definir(RIO.ligado() ? 'classico' : 'rio'); botaoModo();
     if (estado.dados && !$('telaMontagem').classList.contains('oculto')) desenharTudo();
     if (estado.painel && !$('telaPainel').classList.contains('oculto')) desenharPainel(estado.painel);
+    else if (estado.areasTela && !$('telaPainel').classList.contains('oculto')) desenharTelaAreas(estado.areasTela);
   }
 
   function marcarAtivo() {
@@ -1960,6 +1970,8 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
       t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: 'Metas atendidas pelos arranjos' }), tm]));
     }
 
+    if (!reg && p.areas) t.appendChild(blocoAreas(p.areas, p.resumo.length));
+
     var ta = el('table');
     ta.appendChild(el('tr', {}, (reg ? [] : ['Regional']).concat(['Arranjo', 'Cadeias Produtivas', 'Áreas Transversais', 'Público', 'Municípios', 'Equipe', 'Parceiros', 'PSH', 'Metas assumidas', 'Metas atendidas']).map(function (h) { return el('th', { text: h }); })));
     p.arranjos.forEach(function (a) {
@@ -1975,6 +1987,95 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
       ]));
     });
     t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: (reg ? 'Arranjos da regional (' : 'Todos os arranjos (') + p.arranjos.length + ')' }), ta]));
+  }
+
+  // ---------- painel das cadeias e áreas (assessores estaduais; também no painel da DEPLAN) ----------
+  function carregarAreas() {
+    sinal('Carregando…');
+    api('carregarPainelAreas', estado.token).then(function (d) { sinal(''); mostrar('telaPainel'); desenharTelaAreas(d); }).catch(erroSessao);
+  }
+
+  function desenharTelaAreas(d) {
+    var t = $('telaPainel'); t.innerHTML = ''; estado.areasTela = d;
+    t.appendChild(el('div', { class: 'barra' }, [
+      el('button', { text: 'Atualizar', onclick: carregarAreas }),
+      el('span', { class: 'estado', text: d.estado.aceitando ? 'Regionais montando os arranjos: os números mudam até o fim do prazo' : 'Prazo encerrado' })
+    ]));
+    var nReg = (d.areas[0] && d.areas[0].por_regional.length) || 0;
+    t.appendChild(blocoAreas(d.areas, nReg));
+  }
+
+  // Visão geral de todas as cadeias e áreas e o detalhe da escolhida: regionais, equipes, integrações.
+  function blocoAreas(areas, nReg) {
+    var caixa = el('div', { class: 'bloco areas' });
+    if (!areas.length) { caixa.appendChild(el('p', { text: 'Nenhuma cadeia ou área cadastrada.' })); return caixa; }
+    if (!areas.some(function (a) { return a.codigo === estado.areaSel; })) estado.areaSel = areas.slice().sort(function (a, b) { return b.arranjos - a.arranjos; })[0].codigo;
+    var detalhe = el('div');
+    var sel = el('select', { 'aria-label': 'Cadeia produtiva ou área transversal' });
+    [['cadeia', 'Cadeias Produtivas'], ['transversal', 'Áreas Transversais']].forEach(function (g) {
+      var og = el('optgroup', { label: g[1] });
+      areas.filter(function (a) { return a.tipo === g[0]; }).forEach(function (a) { og.appendChild(el('option', { value: a.codigo, text: a.nome + ' (' + a.arranjos + ')' })); });
+      sel.appendChild(og);
+    });
+    sel.value = estado.areaSel;
+    var escolher = function (cod) { estado.areaSel = cod; sel.value = cod; desenharDetalheArea(detalhe, areas.filter(function (a) { return a.codigo === cod; })[0], nReg); };
+    sel.addEventListener('change', function () { escolher(sel.value); });
+    caixa.appendChild(el('h3', { text: 'Cadeias produtivas e áreas transversais nas regionais' }));
+    caixa.appendChild(el('p', { class: 'dica', text: 'Escolha a cadeia ou área para ver em quais regionais aparece, quantas equipes (arranjos) e técnicos envolve e com quais outras cadeias e áreas se integra.' }));
+    caixa.appendChild(el('label', { class: 'campo-area' }, ['Cadeia ou área: ', sel]));
+    caixa.appendChild(detalhe);
+    escolher(estado.areaSel);
+
+    var tg = el('table', {}, [el('tr', {}, ['Cadeia ou área', 'Tipo', 'Arranjos (equipes)', 'Regionais', 'Técnicos', 'Integra mais com'].map(function (h, i) { return el('th', { class: i > 1 && i < 5 ? 'num' : '', text: h }); }))]);
+    areas.slice().sort(function (a, b) { return b.arranjos - a.arranjos || a.nome.localeCompare(b.nome); }).forEach(function (a) {
+      var tr = el('tr', { class: 'clicavel', tabindex: '0', title: 'Ver o detalhe de ' + a.nome }, [
+        el('td', { text: a.nome }), el('td', { text: a.tipo === 'transversal' ? 'Área transversal' : 'Cadeia produtiva' }),
+        el('td', { class: 'num', text: String(a.arranjos) }), el('td', { class: 'num', text: a.regionais + ' / ' + nReg }), el('td', { class: 'num', text: String(a.tecnicos) }),
+        el('td', { text: a.integracoes.slice(0, 3).map(function (i) { return i.nome + ' (' + i.arranjos + ')'; }).join(', ') })
+      ]);
+      var ir = function () { escolher(a.codigo); sel.scrollIntoView({ block: 'center' }); };
+      tr.addEventListener('click', ir);
+      tr.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') ir(); });
+      tg.appendChild(tr);
+    });
+    caixa.appendChild(el('h4', { text: 'Todas as cadeias e áreas' }));
+    caixa.appendChild(el('div', { class: 'rolavel' }, [tg]));
+    return caixa;
+  }
+
+  function desenharDetalheArea(alvo, a, nReg) {
+    alvo.innerHTML = '';
+    var kpis = el('div', { class: 'kpis' });
+    [[a.arranjos, 'arranjos (equipes) com ' + (a.tipo === 'transversal' ? 'a área' : 'a cadeia')], [a.regionais + ' / ' + nReg, 'regionais onde aparece'],
+     [a.tecnicos, 'técnicos envolvidos'], [a.municipios, 'municípios alcançados'], [a.integracoes.length, 'cadeias e áreas integradas']]
+      .forEach(function (k) { kpis.appendChild(el('div', { class: 'kpi' }, [el('b', { text: String(k[0]) }), el('span', { text: k[1] })])); });
+    alvo.appendChild(kpis);
+    var barra = function (v, max) { var b = el('div', { class: 'barra-h' }); b.style.width = (v / Math.max(max, 1) * 100) + '%'; return b; };
+
+    var maxR = Math.max.apply(null, a.por_regional.map(function (r) { return r.arranjos; }).concat([1]));
+    var tr = el('table', {}, [el('tr', {}, ['Regional', 'Arranjos', 'Técnicos', 'Municípios', 'Equipe', 'Arranjos (nomes)', ''].map(function (h, i) { return el('th', { class: i && i < 4 ? 'num' : '', text: h }); }))]);
+    a.por_regional.forEach(function (r) {
+      tr.appendChild(el('tr', { class: r.arranjos ? '' : 'apagada' }, [el('td', { text: r.regional }), el('td', { class: 'num', text: String(r.arranjos) }),
+        el('td', { class: 'num', text: String(r.tecnicos) }), el('td', { class: 'num', text: String(r.municipios) }),
+        el('td', { text: (r.tecnicos_nomes || []).join(', ') }),
+        el('td', { text: r.nomes.join('; ') }), el('td', { style: 'width:20%' }, [barra(r.arranjos, maxR)])]));
+    });
+    alvo.appendChild(el('h4', { text: 'Por regional' }));
+    alvo.appendChild(el('div', { class: 'rolavel' }, [tr]));
+
+    var lista = function (titulo, cab, itens, vazio, comTipo) {
+      alvo.appendChild(el('h4', { text: titulo }));
+      if (!itens.length) { alvo.appendChild(el('p', { class: 'dica', text: vazio })); return; }
+      var max = itens[0].arranjos, tb = el('table', {}, [el('tr', {}, [el('th', { text: cab }), comTipo ? el('th', { text: 'Tipo' }) : null, el('th', { class: 'num', text: 'Arranjos em comum' }), el('th', { text: '' })])]);
+      itens.forEach(function (i) {
+        tb.appendChild(el('tr', {}, [el('td', { text: i.nome }), comTipo ? el('td', { text: i.tipo === 'transversal' ? 'Área transversal' : 'Cadeia produtiva' }) : null,
+          el('td', { class: 'num', text: String(i.arranjos) }), el('td', { style: 'width:30%' }, [barra(i.arranjos, max)])]));
+      });
+      alvo.appendChild(el('div', { class: 'rolavel' }, [tb]));
+    };
+    lista('Integra com', 'Cadeia ou área', a.integracoes, 'Ainda não aparece junto com outras cadeias ou áreas.', true);
+    lista('Públicos atendidos nesses arranjos', 'Público', a.publicos, 'Nenhum público informado.');
+    lista('Parceiros envolvidos nesses arranjos', 'Parceiro', a.parceiros, 'Nenhum parceiro informado.');
   }
 
   function exportar() {
@@ -2021,6 +2122,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     var s0 = document.createElement('script'); s0.src = 'Metas.gs' + v; document.body.appendChild(s0);
     var sp = document.createElement('script'); sp.src = 'Parceiros.gs' + v; document.body.appendChild(sp);
     var sm = document.createElement('script'); sm.src = 'MetasRegionais.gs' + v; document.body.appendChild(sm);
+    var sa = document.createElement('script'); sa.src = 'Areas.gs' + v; document.body.appendChild(sa);
     var s1 = document.createElement('script'); s1.src = '../dev/mock-catalogos.js' + v;
     s1.onload = function () { var s2 = document.createElement('script'); s2.src = '../dev/mock.js' + v; s2.onload = iniciar; document.body.appendChild(s2); };
     s1.onerror = function () { $('erroEntrada').textContent = 'Backend indisponível.'; };
