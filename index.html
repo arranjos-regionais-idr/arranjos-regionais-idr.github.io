@@ -156,6 +156,8 @@
   #caixaMetas .metas-inst .num, .metas-reg .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .metas-inst .acima, .metas-reg .acima { color: #b3261e; font-weight: 600; }
   .metas-inst .cheia, .metas-reg .cheia { color: var(--verde); font-weight: 600; }
+  .metas-reg small { display: block; font-weight: 400; color: var(--suave); }
+  .metas-reg .acima small { color: #b3261e; }
   #caixaMetas .metas-inst small { display: block; color: var(--suave); margin-top: 4px; }
   #telaMontagem.com-metas .grade { padding-bottom: 46vh; }
 
@@ -1896,7 +1898,12 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     var inds = p.indicadores_meta || [];
     if (inds.length) {
       var tmr = el('table', { class: 'metas-reg' }, [el('tr', {}, [el('th', { text: 'Regional' })].concat(inds.map(function (i) { return el('th', { class: 'num', text: i.nome }); })))]);
-      var celula = function (d, m) { return el('td', { class: 'num' + (m == null ? '' : d > m ? ' acima' : d === m ? ' cheia' : ''), text: Number(d).toLocaleString('pt-BR') + (m == null ? '' : ' / ' + Number(m).toLocaleString('pt-BR')) }); };
+      // distribuído / meta, e embaixo o saldo (o que falta distribuir, ou quanto passou da meta)
+      var celula = function (d, m) {
+        var fmt = function (n) { return Number(n).toLocaleString('pt-BR'); };
+        var saldo = m == null ? '' : m - d > 0 ? 'saldo: ' + fmt(m - d) : m - d < 0 ? 'excede: ' + fmt(d - m) : 'meta fechada';
+        return el('td', { class: 'num' + (m == null ? '' : d > m ? ' acima' : d === m ? ' cheia' : '') }, [fmt(d) + (m == null ? '' : ' / ' + fmt(m)), saldo ? el('small', { text: saldo }) : null]);
+      };
       if (reg) { // na regional: quanto cada arranjo assumiu; a linha de total compara com a meta
         tmr.firstChild.firstChild.textContent = 'Arranjo';
         p.arranjos.forEach(function (a) {
@@ -1914,21 +1921,27 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
         var m = r.reduce(function (s, x) { return s + (x.metas_regional ? x.metas_regional[i.codigo] || 0 : 0); }, 0);
         return celula(d, m);
       }))));
-      t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: 'Metas institucionais: distribuído nos arranjos / meta' }), el('p', { class: 'dica', text: 'Fonte: ' + (p.fonte_metas || '') + '.' }), tmr]));
+      t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: 'Metas institucionais: distribuído nos arranjos / meta e saldo' }), el('p', { class: 'dica', text: 'Fonte: ' + (p.fonte_metas || '') + '.' }), tmr]));
     }
 
-    var max = Math.max.apply(null, p.uso_projetos.map(function (u) { return u.arranjos; }).concat([1]));
-    // Uso nos arranjos (do estado ou da regional), uma tabela para cadeias produtivas e outra para áreas transversais.
-    [['cadeia', 'Cadeia Produtiva', 'Cadeias Produtivas usadas nos arranjos'],
-     ['transversal', 'Área Transversal', 'Áreas Transversais usadas nos arranjos']].forEach(function (g) {
+    // Tabela de uso: quantos arranjos usam cada item, com barra proporcional ao mais usado da tabela.
+    function tabelaUso(lista, cab, titulo) {
+      var max = Math.max.apply(null, lista.map(function (u) { return u.arranjos; }).concat([1]));
       var tu = el('table');
-      tu.appendChild(el('tr', {}, [el('th', { text: g[1] }), el('th', { class: 'num', text: 'Arranjos' }), el('th', { text: '' })]));
-      p.uso_projetos.filter(function (u) { return u.tipo === g[0]; }).sort(function (a, b) { return b.arranjos - a.arranjos; }).forEach(function (u) {
+      tu.appendChild(el('tr', {}, [el('th', { text: cab }), el('th', { class: 'num', text: 'Arranjos' }), el('th', { text: '' })]));
+      lista.slice().sort(function (a, b) { return b.arranjos - a.arranjos; }).forEach(function (u) {
         var b = el('div', { class: 'barra-h' }); b.style.width = (u.arranjos / max * 100) + '%';
         tu.appendChild(el('tr', {}, [el('td', { text: u.nome }), el('td', { class: 'num', text: String(u.arranjos) }), el('td', { style: 'width:40%' }, [b])]));
       });
-      t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: g[2] }), tu]));
+      t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: titulo }), tu]));
+    }
+    // Uso nos arranjos (do estado ou da regional), uma tabela para cadeias produtivas e outra para áreas transversais.
+    [['cadeia', 'Cadeia Produtiva', 'Cadeias Produtivas usadas nos arranjos'],
+     ['transversal', 'Área Transversal', 'Áreas Transversais usadas nos arranjos']].forEach(function (g) {
+      tabelaUso(p.uso_projetos.filter(function (u) { return u.tipo === g[0]; }), g[1], g[2]);
     });
+    if (p.uso_publicos) tabelaUso(p.uso_publicos, 'Público', 'Públicos atendidos pelos arranjos');
+    if (p.uso_parceiros) tabelaUso(p.uso_parceiros, 'Parceiro', 'Parceiros envolvidos nos arranjos');
 
     // Metas (PPA, ODS e outras): quantos arranjos e quantas regionais atendem cada uma.
     var rank = function (f) { var i = ORDEM_FONTES.indexOf(f); return i < 0 ? ORDEM_FONTES.length : i; };
@@ -1948,14 +1961,16 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     }
 
     var ta = el('table');
-    ta.appendChild(el('tr', {}, (reg ? [] : ['Regional']).concat(['Arranjo', 'Cadeias Produtivas', 'Áreas Transversais', 'Público', 'Municípios', 'Técnicos', 'Parceiros', 'PSH', 'Metas atendidas']).map(function (h) { return el('th', { text: h }); })));
+    ta.appendChild(el('tr', {}, (reg ? [] : ['Regional']).concat(['Arranjo', 'Cadeias Produtivas', 'Áreas Transversais', 'Público', 'Municípios', 'Equipe', 'Parceiros', 'PSH', 'Metas assumidas', 'Metas atendidas']).map(function (h) { return el('th', { text: h }); })));
     p.arranjos.forEach(function (a) {
       ta.appendChild(el('tr', {}, [
         reg ? null : el('td', { text: a.regional }), el('td', { text: a.nome }),
         el('td', { text: (a.cadeias || []).join(', ') }), el('td', { text: (a.transversais || []).join(', ') }),
         el('td', { text: a.publicos.join(', ') }),
         el('td', { text: a.municipios.length + ': ' + a.municipios.join(', ') }),
-        el('td', { class: 'num', text: String(a.tecnicos) }), el('td', { text: (a.parceiros || []).join(', ') }), el('td', { text: a.psh ? 'sim' : '' }),
+        el('td', { text: a.tecnicos + (a.tecnicos_nomes && a.tecnicos_nomes.length ? ': ' + a.tecnicos_nomes.join(', ') : '') }),
+        el('td', { text: (a.parceiros || []).join(', ') }), el('td', { text: a.psh ? 'sim' : '' }),
+        el('td', { text: inds.filter(function (i) { return (a.metas_institucionais || {})[i.codigo]; }).map(function (i) { return i.nome + ': ' + Number(a.metas_institucionais[i.codigo]).toLocaleString('pt-BR'); }).join('; ') }),
         el('td', { text: (a.metas || []).map(function (m) { return m.fonte + ' · ' + m.titulo; }).join('; ') })
       ]));
     });
