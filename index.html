@@ -57,7 +57,7 @@
   #telaMontagem { display: grid; grid-template-columns: 320px 1fr; flex: 1; min-height: 0; }
   .bancada, .col-arranjo { display: contents; }
   aside { background: var(--branco); border-right: 1px solid var(--borda); display: flex; flex-direction: column; min-height: 0; }
-  .abas { display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 1px solid var(--borda); }
+  .abas { display: grid; grid-template-columns: repeat(6, 1fr); border-bottom: 1px solid var(--borda); }
   .abas button { border: 0; border-radius: 0; padding: 8px 2px; background: transparent; border-bottom: 3px solid transparent; font-size: 12px; line-height: 1.2; }
   .abas button.ativa { border-bottom-color: var(--verde); font-weight: 600; }
   .busca { padding: 8px; border-bottom: 1px solid var(--borda); }
@@ -76,6 +76,7 @@
   .t-projeto.cadeia { background: var(--cadeia); border-color: var(--cadeia-b); }
   .t-projeto.transversal { background: var(--transv); border-color: var(--transv-b); }
   .t-publico { background: var(--publico); border-color: var(--publico-b); }
+  .t-parceiro { background: #fdf0e2; border-color: #e0b07a; }
   .t-municipio { background: var(--mun); border-color: var(--mun-b); }
   .t-tecnico { background: var(--tec); border-color: var(--tec-b); }
   .chip.fora { border-style: dashed; }
@@ -191,6 +192,7 @@
   }
   .modo-rio .peca canvas { width: 48px; height: 48px; image-rendering: pixelated; flex: none; }
   .modo-rio .peca canvas.eq { width: 24px; height: 26px; }
+  .modo-rio .peca canvas.fer { width: 28px; height: 28px; }
   .peca .cor { width: 14px; height: 18px; flex: none; clip-path: polygon(0 0, 100% 0, 100% 60%, 50% 100%, 0 60%); }
   .rio-rolagem { overflow-x: auto; border: 3px solid #1c1424; border-radius: 6px; background: #245a88; margin-bottom: 12px; }
   .rio-caixa { position: relative; margin: 0 auto; }
@@ -268,6 +270,7 @@
       <button data-aba="publico">Público</button>
       <button data-aba="municipio">Municípios</button>
       <button data-aba="tecnico">Equipe</button>
+      <button data-aba="parceiro">Parceiros</button>
     </div>
     <div class="busca"><input id="inpBusca" placeholder="Buscar…" aria-label="Buscar peças"></div>
     <div class="dica" id="dicaPaleta">Arraste uma peça até um arranjo, ou clique no arranjo e depois na peça.</div>
@@ -673,7 +676,30 @@ window.RIO = (function () {
   const box3 = (s, x, y, w, d, hg, top, front) => { s.rect(x, y, w, d, top[2]); s.rect(x + 1, y + 1, w - 2, d - 1, top[1]); s.rect(x, y + d, w, hg, front[0]); s.rect(x, y + d, w, 1, front[1]); };
   const painelSolar = (s, x, y, w, d) => { s.rect(x, y, w, d, T.mtl[0]); for (let i = x + 1; i < x + w - 1; i += 3) for (let j = y + 1; j < y + d - 1; j += 2) s.set(i, j, T.blu[2]), s.set(i + 1, j, T.blu[1]); };
 
-  // spec: { stage, trans: [códigos], carga, equipe, cores: [cores do público], mapa }
+  // ---------- ferramentas dos parceiros: 14x14, cabo de cima para baixo, encostadas no costado da canoa ----------
+  const anel = (s, cx, cy, r, ri, cor) => { for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) { const d = Math.hypot(x - cx, y - cy); if (d <= r + .3 && d >= ri) s.set(x, y, cor(x - cx, y - cy)); } };
+  const FERRAMENTAS = {
+    remo: ['Remo', s => { s.line(5, 1, 8, 8, T.wood[1]); s.rect(4, 0, 3, 1, T.wood[0]); s.rEll(9, 10, 3.2, 1.7, 1.17, T.wood); }],
+    pa: ['Pá', s => { s.line(5, 1, 7, 7, T.wood[1]); s.rect(4, 0, 3, 1, T.wood[0]); s.sRect(5, 7, 5, 5, T.mtl); s.rect(6, 12, 3, 1, T.mtl[1]); s.set(7, 13, T.mtl[0]); }],
+    picareta: ['Picareta', s => { s.line(5, 13, 8, 2, T.wood[1]); s.line(2, 4, 7, 1, T.mtl[1]); s.line(8, 1, 12, 4, T.mtl[1]); s.rect(7, 1, 2, 2, T.mtl[0]); s.set(1, 5, T.mtl[2]); s.set(13, 5, T.mtl[2]); }],
+    machado: ['Machado', s => { s.line(5, 13, 8, 1, T.wood[1]); s.rect(8, 1, 3, 4, T.mtl[1]); s.rect(11, 0, 1, 6, T.mtl[2]); s.rect(8, 1, 1, 4, T.mtl[0]); }],
+    boia: ['Boia salva-vidas', s => anel(s, 7, 7, 5.5, 2.3, (dx, dy) => Math.abs(dx) < 1.5 || Math.abs(dy) < 1.5 ? T.wht[2] : dx + dy > 0 ? T.red[0] : T.red[1])],
+    enxada: ['Enxada', s => { s.line(4, 0, 8, 10, T.wood[1]); s.rect(6, 10, 6, 2, T.mtl[1]); s.rect(6, 12, 6, 1, T.mtl[0]); s.rect(6, 10, 6, 1, T.mtl[2]); }],
+    ancinho: ['Ancinho', s => { s.line(6, 0, 7, 9, T.wood[1]); s.rect(2, 10, 10, 1, T.mtl[0]); for (let x = 2; x < 12; x += 2) s.rect(x, 11, 1, 2, T.mtl[1]); }],
+    foice: ['Foice', s => { s.line(4, 13, 6, 8, T.wood[1]); anel(s, 9, 7, 4, 2.6, (dx, dy) => dy <= .5 && dx > -4 ? (dy < -2 ? T.mtl[2] : T.mtl[1]) : null); }],
+    lanterna: ['Lanterna', s => { s.line(5, 1, 8, 1, T.mtl[0]); s.set(4, 2, T.mtl[0]); s.set(9, 2, T.mtl[0]); s.rect(4, 3, 6, 1, T.mtl[0]); s.rect(5, 4, 4, 6, T.yel[2]); s.rect(6, 5, 2, 4, T.yel[1]); s.rect(4, 4, 1, 6, T.mtl[1]); s.rect(9, 4, 1, 6, T.mtl[1]); s.rect(4, 10, 6, 2, T.mtl[0]); }],
+    ancora: ['Âncora', s => { anel(s, 7, 1.5, 1.5, .6, () => T.mtl[1]); s.rect(6, 3, 2, 9, T.mtl[1]); s.rect(4, 4, 6, 1, T.mtl[0]); s.line(2, 9, 6, 12, T.mtl[1]); s.line(8, 12, 12, 9, T.mtl[1]); s.set(2, 8, T.mtl[2]); s.set(12, 8, T.mtl[2]); }],
+    balde: ['Balde', s => { anel(s, 7, 6, 4, 3.2, (dx, dy) => dy < 0 ? T.mtl[0] : null); s.rect(3, 6, 8, 1, T.mtl[2]); for (let y = 7; y < 13; y++) { const m = (y - 7) >> 2; s.rect(3 + m, y, 8 - 2 * m, 1, T.mtl[1]); s.set(3 + m, y, T.mtl[2]); s.set(10 - m, y, T.mtl[0]); } }],
+    regador: ['Regador', s => { s.sRect(3, 5, 6, 7, T.grn); s.line(9, 9, 12, 5, T.grn[1]); s.rect(12, 4, 2, 2, T.grn[2]); s.line(3, 6, 1, 9, T.grn[0]); s.line(4, 4, 7, 4, T.grn[0]); }]
+  };
+  // Cada categoria de parceiro tem uma ferramenta fixa; as que sobrarem repetem pela ordem.
+  const FER_PARCEIRO = { PRE: 'pa', FIN: 'boia', UNI: 'lanterna', AUT: 'machado', SEC: 'ancora', ATR: 'enxada', COP: 'remo', SIN: 'foice', SIS: 'ancinho', PQS: 'picareta', CMD: 'regador', CIM: 'balde', FED: 'remo', EMP: 'machado', OSC: 'boia', ESC: 'enxada' };
+  const simboloParceiro = cod => FER_PARCEIRO[cod] || Object.keys(FERRAMENTAS)[[...String(cod)].reduce((n, c) => n + c.charCodeAt(0), 0) % Object.keys(FERRAMENTAS).length];
+  const ferramenta = chave => { const s = new Spr(14, 14); FERRAMENTAS[chave][1](s); return s; };
+  const iconesFer = {};
+  const iconeFerramenta = cod => { const k = simboloParceiro(cod); return iconesFer[k] = iconesFer[k] || ferramenta(k).outline().canvas(); };
+
+  // spec: { stage, trans: [códigos], carga, equipe, cores: [cores do público], mapa, parceiros: [ferramentas] }
   const barcos = {};
   function barco(spec) {
     const chave = JSON.stringify(spec);
@@ -734,13 +760,20 @@ window.RIO = (function () {
     if (tem('11600')) { const x = g.at(.64); box3(s, x - 3, CY + 1, 7, 2, 2, T.ter, T.ter); s.set(x - 2, CY, T.grn[2]); s.set(x, CY - 1, T.grn[1]); s.set(x + 2, CY, T.grn[2]); }
     if (tem('14700')) { const x = g.at(.74); s.rect(x - 3, CY - 1, 6, 4, T.wood[0]); s.rect(x - 3, CY + 1, 6, 1, T.mtl[1]); s.sEll(x - .5, CY - 1, 3, 1.6, T.blu); }
     if (tem('10000')) { const x = g.at(.84); s.sEll(x, CY, 2.5, 1.8, T.cop); s.set(x, CY - 3, T.wht[1]); s.set(x + 1, CY - 4, T.wht[1]); }
+    // Ferramentas dos parceiros: penduradas no costado de cá, numa camada própria (com contorno e acima da água).
+    let fer = null;
+    if (spec.parceiros && spec.parceiros.length) {
+      const fs = new Spr(BW, BH), n = Math.min(spec.parceiros.length, Math.max(1, Math.floor(h.L * .84 / 11)));
+      for (let i = 0; i < n; i++) { const f = n === 1 ? .5 : .1 + .8 * i / (n - 1), x = g.at(f); fs.blit(ferramenta(spec.parceiros[i]), x - 7, Math.round(CY + g.half(f)) - 3 + (i % 2) * 2); }
+      fer = fs.outline().canvas();
+    }
     if (spec.cores.length) { // bandeirolas: uma por público
       const [ax, ay] = topoMastro || [g.x0 + 5, CY - 18], bx = g.bow - 1, by = CY - 14, n = spec.cores.length;
       const pt = t => [Math.round(ax + (bx - ax) * t), Math.round(ay + (by - ay) * t + 4 * Math.sin(t * Math.PI))];
       for (let i = 0; i <= 30; i++) { const [px, py] = pt(i / 30); s.set(px, py, T.brn[0]); }
       spec.cores.forEach((c, i) => { const [px, py] = pt((i + .5) / n); s.rect(px, py + 1, 3, 2, c); s.set(px + 1, py + 3, c); });
     }
-    return barcos[chave] = { img: s.outline().canvas(), sub: sub.canvas(), g };
+    return barcos[chave] = { img: s.outline().canvas(), sub: sub.canvas(), fer, g };
   }
 
   // ---------- cenário ----------
@@ -929,6 +962,7 @@ window.RIO = (function () {
     sombra(ctx, x + g.x0 + g.h.L / 2 + 3, cy + g.h.hw + (naAgua ? 4 : 3), g.h.L / 2, naAgua ? g.h.hw * .7 : 3, naAgua ? .25 : .2);
     ctx.drawImage(b.img, x, top);
     if (naAgua) { ctx.globalAlpha = .7; ctx.drawImage(b.sub, x, top); ctx.globalAlpha = 1; }
+    if (b.fer) ctx.drawImage(b.fer, x, top);
   }
   function desenharAgua(ctx, W, t, semTelhado) {
     ctx.fillStyle = '#e8f8ff';
@@ -1139,7 +1173,7 @@ window.RIO = (function () {
       let iA = 0, iT = 0;
       info.forEach(i => { i.x = i.ok ? 4 + (iA % 6) * 32 : 4 + (iT % 6) * 32; i.y = i.ok ? (iA++ % 2 ? 40 : 26) + Math.floor(iA / 13) * 6 : 62 + (iT++ % 2) * 6;
         const alvo = document.createElement('div'); alvo.className = 'rio-alvo'; alvo.tabIndex = 0;
-        alvo.title = i.a.nome + (i.ok ? ' · no rio' : ' · na margem (incompleto)') + '\nCadeias: ' + (i.a.cadeias.join(', ') || '—') + '\nÁreas: ' + (i.a.transversais.join(', ') || '—') + '\nPúblico: ' + (i.a.publicos.join(', ') || '—') + '\nMunicípios: ' + i.a.municipios.length + ' · Equipe: ' + i.a.tecnicos;
+        alvo.title = i.a.nome + (i.ok ? ' · no rio' : ' · na margem (incompleto)') + '\nCadeias: ' + (i.a.cadeias.join(', ') || '—') + '\nÁreas: ' + (i.a.transversais.join(', ') || '—') + '\nPúblico: ' + (i.a.publicos.join(', ') || '—') + '\nMunicípios: ' + i.a.municipios.length + ' · Equipe: ' + i.a.tecnicos + '\nParceiros: ' + ((i.a.parceiros || []).join(', ') || '—');
         alvo.setAttribute('aria-label', alvo.title);
         Object.assign(alvo.style, { left: (i.x + 6) * 2 + 'px', top: (i.y + 6) * 2 + 'px', width: 36 + 'px', height: 26 + 'px' });
         camada.append(alvo);
@@ -1158,6 +1192,7 @@ window.RIO = (function () {
     ligado: () => modo === 'rio',
     definir(m) { modo = m; try { localStorage.setItem(CHAVE, m); } catch (e) { /* ok */ } document.body.classList.toggle('modo-rio', m === 'rio'); },
     LOGO, icone, objeto, crew: () => CREW_C[0], corPublico: i => PUB_CORES[i % PUB_CORES.length],
+    simboloParceiro, iconeFerramenta, nomeFerramenta: cod => FERRAMENTAS[simboloParceiro(cod)][0],
     estagio: zonas => ESTAGIO[zonas], cena, fundoEntrada, painel
   };
 })();
@@ -1167,18 +1202,18 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
 (function () {
   'use strict';
 
-  var ROTULOS = { projeto: 'Cadeias Produtivas ou Áreas Transversais', publico: 'Público', municipio: 'Municípios', tecnico: 'Equipe' };
+  var ROTULOS = { projeto: 'Cadeias Produtivas ou Áreas Transversais', publico: 'Público', municipio: 'Municípios', tecnico: 'Equipe', parceiro: 'Parceiros' };
   // Zonas do cartão: os projetos aparecem separados em cadeias e transversais, como na paleta.
   var ZONAS_CARTAO = [
     { tipo: 'projeto', filtro: 'cadeia', rotulo: 'Cadeias Produtivas', vazia: 'Arraste cadeias produtivas aqui' },
     { tipo: 'projeto', filtro: 'transversal', rotulo: 'Áreas Transversais', vazia: 'Arraste áreas transversais aqui' },
-    { tipo: 'publico' }, { tipo: 'municipio' }, { tipo: 'tecnico' }
+    { tipo: 'publico' }, { tipo: 'municipio' }, { tipo: 'tecnico' }, { tipo: 'parceiro' }
   ];
   // As duas primeiras abas da paleta mostram projetos, separados pela marca cadeia/transversal.
   var ABAS_PALETA = {
     cadeia: { tipo: 'projeto', filtro: 'cadeia', rotulo: 'Cadeias Produtivas' },
     transversal: { tipo: 'projeto', filtro: 'transversal', rotulo: 'Áreas Transversais' },
-    publico: { tipo: 'publico' }, municipio: { tipo: 'municipio' }, tecnico: { tipo: 'tecnico' }
+    publico: { tipo: 'publico' }, municipio: { tipo: 'municipio' }, tecnico: { tipo: 'tecnico' }, parceiro: { tipo: 'parceiro' }
   };
   var estado = { token: null, perfil: null, regional: null, dados: null, ativo: null, aba: 'cadeia', abertos: {}, busca: '', timers: {}, pendentes: 0 };
 
@@ -1263,7 +1298,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     sinal('Carregando…');
     api('carregarRegional', s.token).then(function (d) {
       estado.dados = d; sinal('');
-      d.arranjos.forEach(function (a) { a._lancado = !faltaDe(a).length; }); // completos já salvos começam no rio
+      d.arranjos.forEach(function (a) { a.itens.parceiro = a.itens.parceiro || []; a._lancado = !faltaDe(a).length; }); // completos já salvos começam no rio
       mostrar('telaMontagem');
       avisoPrazo(d.estado);
       desenharTudo();
@@ -1298,7 +1333,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
   // ---------- catálogos e contagem de uso ----------
   function catalogo(tipo) {
     var c = estado.dados.catalogos;
-    return { projeto: c.projetos, publico: c.publicos, municipio: c.municipios, tecnico: c.equipe }[tipo];
+    return { projeto: c.projetos, publico: c.publicos, municipio: c.municipios, tecnico: c.equipe, parceiro: c.parceiros || [] }[tipo];
   }
   function itemDe(tipo, codigo) {
     return catalogo(tipo).filter(function (i) { return i.codigo === codigo; })[0] || {};
@@ -1459,7 +1494,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     if (!estado.dados.arranjos.length) {
       g.appendChild(el('div', { class: 'vazio-geral' }, [
         el('p', { text: 'Nenhum arranjo ainda.' }),
-        el('p', { text: 'Clique em “+ Novo arranjo”, dê um nome (ex.: Mulheres do Café) e arraste cadeias produtivas, áreas transversais, público, municípios e equipe.' })
+        el('p', { text: 'Clique em “+ Novo arranjo”, dê um nome (ex.: Mulheres do Café) e arraste cadeias produtivas, áreas transversais, público, municípios, equipe e parceiros.' })
       ]));
       return;
     }
@@ -1518,7 +1553,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
       var item = itemDe(tipo, codigo);
       var deFora = tipo === 'tecnico' && item.codigo && !daMinhaRegional(item);
       var ch = el('span', { class: 'chip t-' + tipo + (item.tipo ? ' ' + item.tipo : '') + (deFora ? ' fora' : ''),
-        title: tipo === 'tecnico' ? detalheTecnico(item) : (RIO.ligado() ? rotulo + ': ' + nomeDe(tipo, codigo) + (tipo === 'projeto' ? '\nSímbolo: ' + RIO.objeto(item) : '') : '') }, [nomeDe(tipo, codigo)]);
+        title: tipo === 'tecnico' ? detalheTecnico(item) : (RIO.ligado() ? rotulo + ': ' + nomeDe(tipo, codigo) + (simbolo(tipo, item) ? '\nSímbolo: ' + simbolo(tipo, item) : '') : '') }, [nomeDe(tipo, codigo)]);
       if (!travado) ch.appendChild(el('button', { 'aria-label': 'Remover', text: '×', onclick: function (ev) {
         ev.stopPropagation(); cod.splice(cod.indexOf(codigo), 1); alterou(a);
       } }));
@@ -1530,14 +1565,19 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
 
   // ---------- modo rio: cada arranjo é uma canoa; os itens ficam nas barracas e no escritório ----------
   function iconePeca(n, tipo, item, sub) {
-    var desenho = tipo === 'projeto' ? RIO.icone(item) : tipo === 'tecnico' ? RIO.crew() : null;
+    var desenho = tipo === 'projeto' ? RIO.icone(item) : tipo === 'tecnico' ? RIO.crew() : tipo === 'parceiro' ? RIO.iconeFerramenta(item.codigo) : null;
     if (desenho) {
-      var cv = el('canvas', { width: desenho.width, height: desenho.height, class: tipo === 'tecnico' ? 'eq' : '' });
+      var cv = el('canvas', { width: desenho.width, height: desenho.height, class: tipo === 'tecnico' ? 'eq' : tipo === 'parceiro' ? 'fer' : '' });
       cv.getContext('2d').drawImage(desenho, 0, 0); n.insertBefore(cv, n.firstChild);
-      if (tipo === 'projeto') { cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', RIO.objeto(item)); }
+      if (simbolo(tipo, item)) { cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', simbolo(tipo, item)); }
     }
     if (tipo === 'publico') { var cor = el('span', { class: 'cor' }); cor.style.background = RIO.corPublico(catalogo('publico').indexOf(item)); n.insertBefore(cor, n.firstChild); }
-    n.title = item.nome + (tipo === 'projeto' ? '\nSímbolo: ' + RIO.objeto(item) : '') + (sub ? '\n' + sub : '') + '\nArraste até uma canoa, ou clique para embarcar na canoa selecionada.';
+    n.title = item.nome + (simbolo(tipo, item) ? '\nSímbolo: ' + simbolo(tipo, item) : '') + (sub ? '\n' + sub : '') + '\nArraste até uma canoa, ou clique para embarcar na canoa selecionada.';
+  }
+
+  // Nome do desenho do item no rio: cadeias e áreas viram objetos; parceiros, ferramentas.
+  function simbolo(tipo, item) {
+    return tipo === 'projeto' ? RIO.objeto(item) : tipo === 'parceiro' && item.codigo ? RIO.nomeFerramenta(item.codigo) : '';
   }
 
   function faltaDe(a) {
@@ -1575,9 +1615,10 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
       dica: [nome + (falta.length ? ' · na margem, falta: ' + falta.join(', ') : a._lancado ? ' · no rio' : ' · pronta: clique em “Lançar ao rio” ou arraste a canoa até a água'),
         linha('Cadeias produtivas', nomes('projeto', cad)), linha('Áreas transversais', nomes('projeto', tra)),
         linha('Público', nomes('publico', a.itens.publico)), linha('Municípios', nomes('municipio', a.itens.municipio)),
-        linha('Equipe', nomes('tecnico', a.itens.tecnico))].join('\n'),
+        linha('Equipe', nomes('tecnico', a.itens.tecnico)), linha('Parceiros', nomes('parceiro', a.itens.parceiro))].join('\n'),
       spec: { stage: RIO.estagio(zonas), trans: tra.map(String), carga: cad.length, equipe: a.itens.tecnico.length,
-        cores: a.itens.publico.map(function (c) { return RIO.corPublico(codPub.indexOf(c)); }), mapa: a.itens.municipio.length > 0 }
+        cores: a.itens.publico.map(function (c) { return RIO.corPublico(codPub.indexOf(c)); }), mapa: a.itens.municipio.length > 0,
+        parceiros: a.itens.parceiro.map(RIO.simboloParceiro) }
     };
   }
 
@@ -1674,7 +1715,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
   }
 
   function novo() {
-    var a = { id: '', _tmp: 'tmp' + Date.now(), nome: 'Novo arranjo', descricao: '', psh: false, itens: { projeto: [], publico: [], municipio: [], tecnico: [] } };
+    var a = { id: '', _tmp: 'tmp' + Date.now(), nome: 'Novo arranjo', descricao: '', psh: false, itens: { projeto: [], publico: [], municipio: [], tecnico: [], parceiro: [] } };
     estado.dados.arranjos.unshift(a);
     estado.ativo = a;
     desenharTudo();
@@ -1805,14 +1846,14 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     }
 
     var ta = el('table');
-    ta.appendChild(el('tr', {}, ['Regional', 'Arranjo', 'Cadeias Produtivas', 'Áreas Transversais', 'Público', 'Municípios', 'Técnicos', 'PSH', 'Metas atendidas'].map(function (h) { return el('th', { text: h }); })));
+    ta.appendChild(el('tr', {}, ['Regional', 'Arranjo', 'Cadeias Produtivas', 'Áreas Transversais', 'Público', 'Municípios', 'Técnicos', 'Parceiros', 'PSH', 'Metas atendidas'].map(function (h) { return el('th', { text: h }); })));
     p.arranjos.forEach(function (a) {
       ta.appendChild(el('tr', {}, [
         el('td', { text: a.regional }), el('td', { text: a.nome }),
         el('td', { text: (a.cadeias || []).join(', ') }), el('td', { text: (a.transversais || []).join(', ') }),
         el('td', { text: a.publicos.join(', ') }),
         el('td', { text: a.municipios.length + ': ' + a.municipios.join(', ') }),
-        el('td', { class: 'num', text: String(a.tecnicos) }), el('td', { text: a.psh ? 'sim' : '' }),
+        el('td', { class: 'num', text: String(a.tecnicos) }), el('td', { text: (a.parceiros || []).join(', ') }), el('td', { text: a.psh ? 'sim' : '' }),
         el('td', { text: (a.metas || []).map(function (m) { return m.fonte + ' · ' + m.titulo; }).join('; ') })
       ]));
     });
@@ -1860,6 +1901,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
   if (!window.API_URL && !(window.google && google.script)) {
     var v = '?v=' + Date.now(); // a prévia sempre baixa a simulação atual, sem cache
     var s0 = document.createElement('script'); s0.src = 'Metas.gs' + v; document.body.appendChild(s0);
+    var sp = document.createElement('script'); sp.src = 'Parceiros.gs' + v; document.body.appendChild(sp);
     var s1 = document.createElement('script'); s1.src = '../dev/mock-catalogos.js' + v;
     s1.onload = function () { var s2 = document.createElement('script'); s2.src = '../dev/mock.js' + v; s2.onload = iniciar; document.body.appendChild(s2); };
     s1.onerror = function () { $('erroEntrada').textContent = 'Backend indisponível.'; };
