@@ -288,6 +288,7 @@
     <div class="barra">
       <button class="primario" id="btnNovo">+ Novo arranjo</button>
       <button id="btnConferir">Conferência</button>
+      <button id="btnPanorama" title="Resumo da regional: cobertura, equipe, metas e uso das cadeias e áreas">Panorama da regional</button>
       <button id="btnConcluir">Marcar regional como concluída</button>
       <span class="estado" id="estadoRegional"></span>
     </div>
@@ -1819,10 +1820,39 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     api('carregarPainel', estado.token).then(function (p) { sinal(''); mostrar('telaPainel'); desenharPainel(p); }).catch(erroSessao);
   }
 
+  // Panorama da regional: a mesma consolidação do painel da DEPLAN, só com a regional de quem entrou.
+  function temPendencias() { return estado.pendentes > 0 || /não salvas/.test($('cabSalvo').textContent); }
+  function carregarPanorama() {
+    if (temPendencias()) { avisar('Aguarde salvar as alterações antes de abrir o panorama.'); return; }
+    sinal('Carregando…');
+    api('carregarPainelRegional', estado.token).then(function (p) { sinal(''); mostrar('telaPainel'); desenharPainel(p); window.scrollTo(0, 0); }).catch(erroSessao);
+  }
+  function voltarMontagem() { estado.painel = null; mostrar('telaMontagem'); desenharTudo(); }
+
+  function barraPanorama(p) {
+    var r = p.resumo[0];
+    return el('div', { class: 'barra' }, [
+      el('button', { class: 'primario', text: '← Voltar aos arranjos', onclick: voltarMontagem }),
+      el('button', { text: 'Atualizar', onclick: carregarPanorama }),
+      el('span', { class: 'estado', text: 'Panorama da regional ' + p.regional + ' · ' + (r.concluido ? 'regional concluída' : p.estado.aceitando ? 'em montagem' : 'prazo encerrado') })
+    ]);
+  }
+
+  function kpisPanorama(p) {
+    var r = p.resumo[0], completos = p.arranjos.filter(function (a) { return a.projetos.length && a.municipios.length && a.tecnicos; }).length;
+    return [[r.arranjos, 'arranjos montados'],
+      [completos + ' / ' + r.arranjos, 'arranjos completos (no rio)'],
+      [r.municipios_cobertos + ' / ' + r.municipios_total, 'municípios cobertos'],
+      [r.tecnicos_alocados + ' / ' + r.tecnicos_total, 'técnicos da regional em algum arranjo'],
+      [r.tecnicos_repetidos, 'técnicos em mais de um arranjo'],
+      [r.concluido ? 'Concluída' : r.arranjos ? 'Em montagem' : 'Não iniciada', 'situação da regional']];
+  }
+
   function desenharPainel(p) {
     var t = $('telaPainel'); t.innerHTML = ''; estado.painel = p;
+    var reg = !!p.regional;
     var r = p.resumo, soma = function (k) { return r.reduce(function (s, x) { return s + x[k]; }, 0); };
-    var barra = el('div', { class: 'barra' }, [
+    var barra = reg ? barraPanorama(p) : el('div', { class: 'barra' }, [
       el('button', { class: 'primario', text: 'Exportar planilha (CSV)', onclick: exportar }),
       el('button', { text: p.estado.aceitando ? 'Encerrar prazo (bloquear alterações)' : 'Reabrir prazo', onclick: function () {
         var alvo = !p.estado.aceitando;
@@ -1834,16 +1864,16 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     ]);
     t.appendChild(barra);
     var kpis = el('div', { class: 'kpis' });
-    [[soma('arranjos'), 'arranjos montados'],
+    (reg ? kpisPanorama(p) : [[soma('arranjos'), 'arranjos montados'],
      [r.filter(function (x) { return x.arranjos > 0; }).length + ' / ' + r.length, 'regionais com arranjos'],
      [r.filter(function (x) { return x.concluido; }).length + ' / ' + r.length, 'regionais concluídas'],
      [soma('municipios_cobertos') + ' / ' + soma('municipios_total'), 'municípios cobertos'],
      [soma('tecnicos_alocados') + ' / ' + soma('tecnicos_total'), 'técnicos em algum arranjo'],
      [soma('tecnicos_repetidos'), 'técnicos em mais de um arranjo']
-    ].forEach(function (k) { kpis.appendChild(el('div', { class: 'kpi' }, [el('b', { text: String(k[0]) }), el('span', { text: k[1] })])); });
+    ]).forEach(function (k) { kpis.appendChild(el('div', { class: 'kpi' }, [el('b', { text: String(k[0]) }), el('span', { text: k[1] })])); });
     t.appendChild(kpis);
     if (RIO.ligado()) {
-      var rioReg = el('details', { class: 'bloco', open: '' }, [el('summary', {}, [el('b', { text: 'O rio das regionais' }), ' · ilustrativo: cada braço é uma regional e cada canoa um arranjo; os números que valem são os desta página']), RIO.painel(p)]);
+      var rioReg = el('details', { class: 'bloco', open: '' }, [el('summary', {}, [el('b', { text: reg ? 'O rio da regional' : 'O rio das regionais' }), reg ? ' · ilustrativo: cada canoa é um arranjo; as que estão na margem ainda estão incompletas' : ' · ilustrativo: cada braço é uma regional e cada canoa um arranjo; os números que valem são os desta página']), RIO.painel(p)]);
       t.appendChild(rioReg);
     }
 
@@ -1860,19 +1890,26 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
         el('td', { class: 'num', text: x.concluido ? 'Concluída' : (x.arranjos ? 'Em montagem' : 'Não iniciada') })
       ]));
     });
-    t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: 'Situação por regional' }), tab]));
+    if (!reg) t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: 'Situação por regional' }), tab]));
 
     // Metas institucionais: quanto os arranjos de cada regional assumiram, frente à meta do documento.
     var inds = p.indicadores_meta || [];
     if (inds.length) {
       var tmr = el('table', { class: 'metas-reg' }, [el('tr', {}, [el('th', { text: 'Regional' })].concat(inds.map(function (i) { return el('th', { class: 'num', text: i.nome }); })))]);
       var celula = function (d, m) { return el('td', { class: 'num' + (m == null ? '' : d > m ? ' acima' : d === m ? ' cheia' : ''), text: Number(d).toLocaleString('pt-BR') + (m == null ? '' : ' / ' + Number(m).toLocaleString('pt-BR')) }); };
-      r.forEach(function (x) {
+      if (reg) { // na regional: quanto cada arranjo assumiu; a linha de total compara com a meta
+        tmr.firstChild.firstChild.textContent = 'Arranjo';
+        p.arranjos.forEach(function (a) {
+          tmr.appendChild(el('tr', {}, [el('td', { text: a.nome })].concat(inds.map(function (i) {
+            return el('td', { class: 'num', text: Number((a.metas_institucionais || {})[i.codigo] || 0).toLocaleString('pt-BR') });
+          }))));
+        });
+      } else r.forEach(function (x) {
         tmr.appendChild(el('tr', {}, [el('td', { text: x.regional })].concat(inds.map(function (i) {
           return celula((x.metas_distribuidas || {})[i.codigo] || 0, x.metas_regional ? x.metas_regional[i.codigo] : null);
         }))));
       });
-      tmr.appendChild(el('tr', {}, [el('td', {}, [el('b', { text: 'Estado' })])].concat(inds.map(function (i) {
+      tmr.appendChild(el('tr', {}, [el('td', {}, [el('b', { text: reg ? 'Total / meta da regional' : 'Estado' })])].concat(inds.map(function (i) {
         var d = r.reduce(function (s, x) { return s + ((x.metas_distribuidas || {})[i.codigo] || 0); }, 0);
         var m = r.reduce(function (s, x) { return s + (x.metas_regional ? x.metas_regional[i.codigo] || 0 : 0); }, 0);
         return celula(d, m);
@@ -1881,7 +1918,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     }
 
     var max = Math.max.apply(null, p.uso_projetos.map(function (u) { return u.arranjos; }).concat([1]));
-    // Uso no estado, uma tabela para cadeias produtivas e outra para áreas transversais.
+    // Uso nos arranjos (do estado ou da regional), uma tabela para cadeias produtivas e outra para áreas transversais.
     [['cadeia', 'Cadeia Produtiva', 'Cadeias Produtivas usadas nos arranjos'],
      ['transversal', 'Área Transversal', 'Áreas Transversais usadas nos arranjos']].forEach(function (g) {
       var tu = el('table');
@@ -1901,20 +1938,20 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     if (usoMetas.length) {
       var maxM = Math.max.apply(null, usoMetas.map(function (u) { return u.arranjos; }).concat([1]));
       var tm = el('table');
-      tm.appendChild(el('tr', {}, [el('th', { text: 'Fonte' }), el('th', { text: 'Meta' }), el('th', { class: 'num', text: 'Arranjos' }), el('th', { class: 'num', text: 'Regionais' }), el('th', { text: '' })]));
+      tm.appendChild(el('tr', {}, [el('th', { text: 'Fonte' }), el('th', { text: 'Meta' }), el('th', { class: 'num', text: 'Arranjos' }), reg ? null : el('th', { class: 'num', text: 'Regionais' }), el('th', { text: '' })]));
       usoMetas.forEach(function (u) {
         var b = el('div', { class: 'barra-h' }); b.style.width = (u.arranjos / maxM * 100) + '%';
         tm.appendChild(el('tr', {}, [el('td', { text: u.fonte }), el('td', { text: u.titulo }), el('td', { class: 'num', text: String(u.arranjos) }),
-          el('td', { class: 'num', text: u.regionais + ' / ' + p.resumo.length }), el('td', { style: 'width:30%' }, [b])]));
+          reg ? null : el('td', { class: 'num', text: u.regionais + ' / ' + p.resumo.length }), el('td', { style: 'width:30%' }, [b])]));
       });
       t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: 'Metas atendidas pelos arranjos' }), tm]));
     }
 
     var ta = el('table');
-    ta.appendChild(el('tr', {}, ['Regional', 'Arranjo', 'Cadeias Produtivas', 'Áreas Transversais', 'Público', 'Municípios', 'Técnicos', 'Parceiros', 'PSH', 'Metas atendidas'].map(function (h) { return el('th', { text: h }); })));
+    ta.appendChild(el('tr', {}, (reg ? [] : ['Regional']).concat(['Arranjo', 'Cadeias Produtivas', 'Áreas Transversais', 'Público', 'Municípios', 'Técnicos', 'Parceiros', 'PSH', 'Metas atendidas']).map(function (h) { return el('th', { text: h }); })));
     p.arranjos.forEach(function (a) {
       ta.appendChild(el('tr', {}, [
-        el('td', { text: a.regional }), el('td', { text: a.nome }),
+        reg ? null : el('td', { text: a.regional }), el('td', { text: a.nome }),
         el('td', { text: (a.cadeias || []).join(', ') }), el('td', { text: (a.transversais || []).join(', ') }),
         el('td', { text: a.publicos.join(', ') }),
         el('td', { text: a.municipios.length + ': ' + a.municipios.join(', ') }),
@@ -1922,7 +1959,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
         el('td', { text: (a.metas || []).map(function (m) { return m.fonte + ' · ' + m.titulo; }).join('; ') })
       ]));
     });
-    t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: 'Todos os arranjos (' + p.arranjos.length + ')' }), ta]));
+    t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: (reg ? 'Arranjos da regional (' : 'Todos os arranjos (') + p.arranjos.length + ')' }), ta]));
   }
 
   function exportar() {
@@ -1938,6 +1975,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
   $('btnEntrar').addEventListener('click', entrar);
   $('inpCodigo').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') entrar(); });
   $('btnSair').addEventListener('click', sair);
+  $('btnPanorama').addEventListener('click', carregarPanorama);
   $('btnModo').addEventListener('click', trocarModo);
   $('logoCab').src = $('logoEntrada').src = RIO.LOGO;
   botaoModo();
