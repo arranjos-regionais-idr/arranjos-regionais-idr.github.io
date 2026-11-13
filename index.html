@@ -135,7 +135,7 @@
   .barra-h { height: 10px; background: var(--verde-2); border-radius: 5px; }
 
   /* Caixa de metas atendidas pelo arranjo ativo */
-  #caixaMetas { position: fixed; right: 16px; bottom: 16px; width: 340px; max-width: calc(100vw - 32px); max-height: 46vh;
+  #caixaMetas { position: fixed; right: 16px; bottom: 16px; width: 410px; max-width: calc(100vw - 32px); max-height: 46vh;
     display: flex; flex-direction: column; background: var(--branco); border: 1px solid var(--borda); border-radius: 10px;
     box-shadow: 0 6px 24px rgba(0,0,0,.18); z-index: 20; font-size: 13px; }
   #caixaMetas .cab { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--verde); color: #fff; border-radius: 10px 10px 0 0; cursor: pointer; }
@@ -149,6 +149,14 @@
   #caixaMetas .meta:last-child { border-bottom: 0; }
   #caixaMetas .meta small { display: block; color: var(--suave); }
   #caixaMetas .vazio { color: var(--suave); padding: 6px 0; }
+  #caixaMetas .metas-inst table { background: transparent; font-size: 12px; }
+  #caixaMetas .metas-inst td, #caixaMetas .metas-inst th { padding: 3px 4px; border-bottom: 1px solid var(--borda); text-align: left; }
+  #caixaMetas .metas-inst th { font-weight: 600; color: var(--suave); font-size: 11px; }
+  #caixaMetas .metas-inst input { width: 64px; padding: 3px 5px; text-align: right; }
+  #caixaMetas .metas-inst .num, .metas-reg .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .metas-inst .acima, .metas-reg .acima { color: #b3261e; font-weight: 600; }
+  .metas-inst .cheia, .metas-reg .cheia { color: var(--verde); font-weight: 600; }
+  #caixaMetas .metas-inst small { display: block; color: var(--suave); margin-top: 4px; }
   #telaMontagem.com-metas .grade { padding-bottom: 46vh; }
 
   /* Modo rio (front animado em pixel art). O botão "Visual" no cabeçalho volta ao clássico. */
@@ -1298,7 +1306,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     sinal('Carregando…');
     api('carregarRegional', s.token).then(function (d) {
       estado.dados = d; sinal('');
-      d.arranjos.forEach(function (a) { a.itens.parceiro = a.itens.parceiro || []; a._lancado = !faltaDe(a).length; }); // completos já salvos começam no rio
+      d.arranjos.forEach(function (a) { a.itens.parceiro = a.itens.parceiro || []; a.metas = a.metas || {}; a._lancado = !faltaDe(a).length; }); // completos já salvos começam no rio
       mostrar('telaMontagem');
       avisoPrazo(d.estado);
       desenharTudo();
@@ -1446,9 +1454,44 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     }).filter(function (r) { return r.motivos.length; });
   }
 
+  // Metas institucionais da regional (documentos de planejamento): cada arranjo assume uma parte,
+  // e a soma dos arranjos é comparada com a meta da regional.
+  function metasRegionais() { var mr = estado.dados && estado.dados.catalogos.metasRegionais; return mr && (mr.indicadores || []).length ? mr : null; }
+  function fmtNum(n) { return Number(n || 0).toLocaleString('pt-BR'); }
+  function distribuido(cod) { return estado.dados.arranjos.reduce(function (s, x) { return s + Number((x.metas || {})[cod] || 0); }, 0); }
+  function estadoMeta(d, m) { return m == null ? '' : d > m ? ' acima' : d === m ? ' cheia' : ''; }
+
+  function blocoMetasRegionais(a, mr) {
+    var travado = bloqueado();
+    var tab = el('table', {}, [el('tr', {}, [el('th', { text: 'Meta' }), el('th', { class: 'num', text: 'Neste arranjo' }), el('th', { class: 'num', text: 'Distribuído / meta', title: 'Soma de todos os arranjos da regional / meta da regional' })])]);
+    mr.indicadores.forEach(function (ind) {
+      var meta = mr.meta ? mr.meta[ind.codigo] : null;
+      var inp = el('input', { type: 'number', min: '0', step: '1', inputmode: 'numeric', 'aria-label': ind.nome + ' neste arranjo', value: String((a.metas || {})[ind.codigo] || '') });
+      inp.disabled = travado;
+      var tot = el('td');
+      var atualizar = function () {
+        var d = distribuido(ind.codigo);
+        tot.className = 'num' + estadoMeta(d, meta);
+        tot.textContent = fmtNum(d) + (meta == null ? '' : ' / ' + fmtNum(meta));
+        tot.title = meta == null ? 'Sem meta de referência' : d > meta ? 'Os arranjos somam ' + fmtNum(d - meta) + ' acima da meta da regional' : 'Falta distribuir ' + fmtNum(meta - d);
+      };
+      inp.addEventListener('input', function () {
+        var v = Math.max(0, Math.floor(Number(inp.value)) || 0), m = Object.assign({}, a.metas);
+        if (v) m[ind.codigo] = v; else delete m[ind.codigo];
+        a.metas = m; atualizar(); agendar(a);
+      });
+      atualizar();
+      tab.appendChild(el('tr', {}, [el('td', { text: ind.nome }), el('td', { class: 'num' }, [inp]), tot]));
+    });
+    return el('div', { class: 'metas-inst' }, [
+      el('h5', { text: 'Metas da regional ' + estado.regional }), tab,
+      el('small', { text: (mr.meta ? 'Fonte: ' : 'Esta regional não tem meta no documento de referência (') + mr.fonte + (mr.meta ? '.' : ').') })
+    ]);
+  }
+
   function desenharMetas() {
     var caixa = $('caixaMetas'), corpo = $('corpoMetas');
-    var temMetas = estado.dados && (estado.dados.catalogos.metas || []).length;
+    var temMetas = estado.dados && ((estado.dados.catalogos.metas || []).length || metasRegionais());
     caixa.classList.toggle('oculto', !temMetas);
     caixa.classList.toggle('fechada', !!estado.metasFechada);
     $('btnMetas').textContent = estado.metasFechada ? '+' : '–';
@@ -1457,12 +1500,16 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     corpo.innerHTML = '';
     var a = estado.ativo;
     if (!a) {
-      $('tituloMetas').textContent = 'Metas atendidas';
-      corpo.appendChild(el('div', { class: 'vazio', text: 'Clique num arranjo para ver as metas do PPA, dos ODS e outras que ele atende.' }));
+      $('tituloMetas').textContent = 'Metas';
+      corpo.appendChild(el('div', { class: 'vazio', text: 'Clique num arranjo para distribuir as metas da regional e ver as metas do PPA, dos ODS e outras que ele atende.' }));
       return;
     }
+    $('tituloMetas').textContent = 'Metas · ' + (String(a.nome || '').trim() || 'sem nome');
+    var mr = metasRegionais();
+    if (mr) corpo.appendChild(blocoMetasRegionais(a, mr));
+    if (!(estado.dados.catalogos.metas || []).length) return;
     var lista = metasDoArranjo(a);
-    $('tituloMetas').textContent = 'Metas atendidas (' + lista.length + ') · ' + (String(a.nome || '').trim() || 'sem nome');
+    corpo.appendChild(el('h5', { text: 'Metas atendidas pelos itens (' + lista.length + ')' }));
     if (!lista.length) {
       corpo.appendChild(el('div', { class: 'vazio', text: 'Nenhuma ainda. Inclua cadeias produtivas, áreas transversais, público e municípios.' }));
       return;
@@ -1471,7 +1518,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     lista.forEach(function (r) { (fontes[r.meta.fonte] = fontes[r.meta.fonte] || []).push(r); });
     var rank = function (f) { var i = ORDEM_FONTES.indexOf(f); return i < 0 ? ORDEM_FONTES.length : i; };
     Object.keys(fontes).sort(function (x, y) { return rank(x) - rank(y) || x.localeCompare(y); }).forEach(function (f) {
-      corpo.appendChild(el('h5', { text: f + ' (' + fontes[f].length + ')' }));
+      corpo.appendChild(el('h5', { text: '· ' + f + ' (' + fontes[f].length + ')' }));
       fontes[f].forEach(function (r) {
         corpo.appendChild(el('div', { class: 'meta', title: r.meta.detalhe || '' }, [
           el('span', { text: r.meta.titulo }),
@@ -1701,7 +1748,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     if (!String(a.nome || '').trim()) { sinal('Dê um nome ao arranjo para salvar.'); return; }
     if (a._salvando) { a._denovo = true; return; }
     a._salvando = true; estado.pendentes++; sinal('Salvando…');
-    var envio = { id: a.id || '', nome: a.nome, descricao: a.descricao, psh: !!a.psh, itens: a.itens };
+    var envio = { id: a.id || '', nome: a.nome, descricao: a.descricao, psh: !!a.psh, itens: a.itens, metas: a.metas || {} };
     api('salvarArranjo', estado.token, envio).then(function (r) {
       a.id = r.id; a.atualizado_em = r.atualizado_em;
       var s = document.querySelector('[data-status="' + a.id + '"]') || (a._tmp && document.querySelector('[data-status="' + a._tmp + '"]'));
@@ -1715,7 +1762,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
   }
 
   function novo() {
-    var a = { id: '', _tmp: 'tmp' + Date.now(), nome: 'Novo arranjo', descricao: '', psh: false, itens: { projeto: [], publico: [], municipio: [], tecnico: [], parceiro: [] } };
+    var a = { id: '', _tmp: 'tmp' + Date.now(), nome: 'Novo arranjo', descricao: '', psh: false, itens: { projeto: [], publico: [], municipio: [], tecnico: [], parceiro: [] }, metas: {} };
     estado.dados.arranjos.unshift(a);
     estado.ativo = a;
     desenharTudo();
@@ -1815,6 +1862,24 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     });
     t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: 'Situação por regional' }), tab]));
 
+    // Metas institucionais: quanto os arranjos de cada regional assumiram, frente à meta do documento.
+    var inds = p.indicadores_meta || [];
+    if (inds.length) {
+      var tmr = el('table', { class: 'metas-reg' }, [el('tr', {}, [el('th', { text: 'Regional' })].concat(inds.map(function (i) { return el('th', { class: 'num', text: i.nome }); })))]);
+      var celula = function (d, m) { return el('td', { class: 'num' + (m == null ? '' : d > m ? ' acima' : d === m ? ' cheia' : ''), text: Number(d).toLocaleString('pt-BR') + (m == null ? '' : ' / ' + Number(m).toLocaleString('pt-BR')) }); };
+      r.forEach(function (x) {
+        tmr.appendChild(el('tr', {}, [el('td', { text: x.regional })].concat(inds.map(function (i) {
+          return celula((x.metas_distribuidas || {})[i.codigo] || 0, x.metas_regional ? x.metas_regional[i.codigo] : null);
+        }))));
+      });
+      tmr.appendChild(el('tr', {}, [el('td', {}, [el('b', { text: 'Estado' })])].concat(inds.map(function (i) {
+        var d = r.reduce(function (s, x) { return s + ((x.metas_distribuidas || {})[i.codigo] || 0); }, 0);
+        var m = r.reduce(function (s, x) { return s + (x.metas_regional ? x.metas_regional[i.codigo] || 0 : 0); }, 0);
+        return celula(d, m);
+      }))));
+      t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: 'Metas institucionais: distribuído nos arranjos / meta' }), el('p', { class: 'dica', text: 'Fonte: ' + (p.fonte_metas || '') + '.' }), tmr]));
+    }
+
     var max = Math.max.apply(null, p.uso_projetos.map(function (u) { return u.arranjos; }).concat([1]));
     // Uso no estado, uma tabela para cadeias produtivas e outra para áreas transversais.
     [['cadeia', 'Cadeia Produtiva', 'Cadeias Produtivas usadas nos arranjos'],
@@ -1902,6 +1967,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     var v = '?v=' + Date.now(); // a prévia sempre baixa a simulação atual, sem cache
     var s0 = document.createElement('script'); s0.src = 'Metas.gs' + v; document.body.appendChild(s0);
     var sp = document.createElement('script'); sp.src = 'Parceiros.gs' + v; document.body.appendChild(sp);
+    var sm = document.createElement('script'); sm.src = 'MetasRegionais.gs' + v; document.body.appendChild(sm);
     var s1 = document.createElement('script'); s1.src = '../dev/mock-catalogos.js' + v;
     s1.onload = function () { var s2 = document.createElement('script'); s2.src = '../dev/mock.js' + v; s2.onload = iniciar; document.body.appendChild(s2); };
     s1.onerror = function () { $('erroEntrada').textContent = 'Backend indisponível.'; };
