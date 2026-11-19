@@ -1397,19 +1397,28 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
   // Login individual pela matrícula no Supabase Auth (window.AUTH_URL e AUTH_KEY vêm do montar_site.py).
   // Na prévia local, a simulação (dev/mock.js) faz o papel do Auth.
   var PREFIXO_SENHA = 'dgp:', DOMINIO = 'arranjos.local';
-  function autenticar(matricula, senha) {
+  function autenticar(matricula, senha, jaTentouDatageo) {
     if (!window.AUTH_URL) return api('entrar', matricula, senha);
     return fetch(window.AUTH_URL + '/auth/v1/token?grant_type=password', {
       method: 'POST', headers: { apikey: window.AUTH_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: matricula + '@' + DOMINIO, password: PREFIXO_SENHA + senha })
-    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (x) {
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }, function () {
+      throw new Error('Sem conexão com o servidor. Tente de novo.');
+    }).then(function (x) {
       if (!x.ok || !x.j.access_token) {
         if (x.j && /banned/i.test(x.j.msg || x.j.error_description || '')) throw new Error('Conta bloqueada. Fale com a DEPLAN.');
+        // Senha trocada no DataGeo depois da virada: o servidor confere lá e, se bater, passa a valer aqui.
+        if (!jaTentouDatageo && senha.length >= 8) {
+          return api('entrarComDatageo', matricula, senha).then(function (bateu) {
+            if (bateu) return autenticar(matricula, senha, true);
+            throw new Error('Matrícula ou senha incorreta.');
+          });
+        }
         throw new Error('Matrícula ou senha incorreta.');
       }
       var token = x.j.access_token;
       return api('minhaSessao', token).then(function (s) { s.token = token; return s; });
-    }, function () { throw new Error('Sem conexão com o servidor. Tente de novo.'); });
+    });
   }
 
   function iniciar() {
