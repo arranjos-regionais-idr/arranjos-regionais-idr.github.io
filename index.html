@@ -1408,7 +1408,8 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     } else { av.className = 'aviso oculto'; }
   }
 
-  function bloqueado() { return !estado.dados.estado.aceitando; }
+  // Regional concluída fica travada para a análise; só a DEPLAN reabre.
+  function bloqueado() { return !estado.dados.estado.aceitando || !!estado.dados.concluido; }
 
   // ---------- catálogos e contagem de uso ----------
   function catalogo(tipo) {
@@ -1602,8 +1603,8 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
 
   function desenharEstado() {
     var d = estado.dados;
-    $('estadoRegional').textContent = d.arranjos.length + ' arranjo(s)' + (d.concluido ? ' · regional marcada como concluída' : '');
-    $('btnConcluir').textContent = d.concluido ? 'Reabrir regional' : 'Marcar regional como concluída';
+    $('estadoRegional').textContent = d.arranjos.length + ' arranjo(s)' + (d.concluido ? ' · regional concluída, em análise (para alterar, peça à DEPLAN que reabra)' : '');
+    $('btnConcluir').textContent = d.concluido ? 'Enviada para análise' : 'Concluir e enviar para análise';
     ['btnNovo', 'btnConcluir'].forEach(function (b) { $(b).disabled = bloqueado(); });
   }
 
@@ -1756,7 +1757,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     desenharCenaRio();
     var g = $('grade'); g.innerHTML = '';
     if (estado.ativo && estado.dados.arranjos.indexOf(estado.ativo) >= 0) { g.appendChild(cartao(estado.ativo)); return; }
-    if (estado.dados.concluido) { g.appendChild(el('div', { class: 'vazio-geral' }, [el('p', { text: 'Regional concluída: as canoas desceram o rio. Para alterar algum arranjo, clique em “Reabrir regional”.' })])); return; }
+    if (estado.dados.concluido) { g.appendChild(el('div', { class: 'vazio-geral' }, [el('p', { text: 'Regional concluída: as canoas desceram o rio e os arranjos estão em análise. Para alterar algum arranjo, peça à DEPLAN que reabra a regional.' })])); return; }
     g.appendChild(el('div', { class: 'vazio-geral' }, [
       el('b', { text: estado.dados.arranjos.length ? 'Clique numa canoa para ver e editar o arranjo.' : 'Nenhum arranjo ainda.' }),
       el('ol', {}, [
@@ -1862,9 +1863,12 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
   }
 
   function concluir() {
-    var d = estado.dados, alvo = !d.concluido;
-    if (alvo && conferir(true) > 0 && !confirm('A conferência aponta arranjos incompletos. Marcar como concluída assim mesmo?')) return;
-    api('marcarConcluido', estado.token, alvo).then(function (v) { d.concluido = v; desenharEstado(); if (RIO.ligado()) desenharGrade(); }).catch(erroSessao);
+    var d = estado.dados;
+    if (d.concluido) return;
+    var aviso = 'Depois de concluir, a regional não poderá mais alterar os arranjos: eles seguem para a análise dos assessores estaduais e só a DEPLAN pode reabrir.';
+    if (conferir(true) > 0) aviso = 'A conferência aponta arranjos incompletos. ' + aviso;
+    if (!confirm(aviso + ' Concluir a regional?')) return;
+    api('marcarConcluido', estado.token, true).then(function (v) { d.concluido = v; desenharEstado(); if (RIO.ligado()) desenharGrade(); }).catch(erroSessao);
   }
 
   // ---------- conferência ----------
@@ -1965,7 +1969,10 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
         el('td', { class: 'num', text: x.municipios_cobertos + ' / ' + x.municipios_total }),
         el('td', { class: 'num', text: x.tecnicos_alocados + ' / ' + x.tecnicos_total }),
         el('td', { class: 'num', text: String(x.tecnicos_repetidos) }),
-        el('td', { class: 'num', text: x.concluido ? 'Concluída' : (x.arranjos ? 'Em montagem' : 'Não iniciada') })
+        el('td', { class: 'num' }, x.concluido ? ['Concluída ', el('button', { text: 'Reabrir', title: 'Devolve a regional para a montagem', onclick: function () {
+          if (!confirm('Reabrir a regional ' + x.regional + '? Ela volta a poder alterar os arranjos e precisará concluir de novo.')) return;
+          api('reabrirRegional', estado.token, x.regional).then(carregarPainel).catch(erroSessao);
+        } })] : [x.arranjos ? 'Em montagem' : 'Não iniciada'])
       ]));
     });
     if (!reg) t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: 'Situação por regional' }), tab]));
