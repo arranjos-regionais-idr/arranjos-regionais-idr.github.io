@@ -58,6 +58,25 @@
   .instrucoes li { margin: 2px 0; }
   .admin-senha { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .admin-senha input { width: 110px; padding: 6px; border: 1px solid var(--borda); border-radius: 6px; }
+  .analise h3 { margin: 0 0 4px; }
+  .analise .desc { color: var(--suave); margin: 0 0 8px; }
+  .analise .info { margin: 3px 0; font-size: 13px; line-height: 1.45; }
+  .form-analise { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--borda); }
+  .form-analise h4 { margin: 0 0 8px; }
+  .form-analise fieldset.obj { border: 0; padding: 0; margin: 0 0 10px; }
+  .form-analise legend { font-weight: 600; margin-bottom: 4px; padding: 0; }
+  .form-analise fieldset.obj label { display: inline-flex; align-items: center; gap: 4px; margin: 0 14px 4px 0; cursor: pointer; }
+  .form-analise fieldset.parecer { background: var(--fundo, #f4f6f2); padding: 8px; border-radius: 8px; }
+  .form-analise textarea { width: 100%; padding: 8px; border: 1px solid var(--borda); border-radius: 6px; font: inherit; }
+  .analise details.outras { margin-top: 12px; }
+  .analise details.outras summary { cursor: pointer; font-weight: 600; }
+  .leitura { border-left: 3px solid var(--borda); padding: 6px 10px; margin: 8px 0; font-size: 13px; }
+  .leitura .quem { margin-bottom: 4px; }
+  .leitura .resp-obj { display: flex; gap: 8px; justify-content: space-between; border-bottom: 1px dotted var(--borda); padding: 2px 0; }
+  .leitura .resp-desc { margin: 6px 0; }
+  .leitura .resp-desc .q { display: block; font-weight: 600; }
+  .leitura .resp-obj .v { font-weight: 600; white-space: nowrap; }
+  .leitura .resp-desc .v { white-space: pre-wrap; }
 
   /* Montagem */
   #telaMontagem { display: grid; grid-template-columns: 320px 1fr; flex: 1; min-height: 0; }
@@ -2042,8 +2061,10 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     var t = $('telaPainel'); t.innerHTML = ''; estado.painel = p;
     var reg = !!p.regional;
     var r = p.resumo, soma = function (k) { return r.reduce(function (s, x) { return s + x[k]; }, 0); };
+    if (!reg) estado.regionaisLista = r.map(function (x) { return x.regional; });
     var barra = reg ? barraPanorama(p) : el('div', { class: 'barra' }, [
       el('button', { class: 'primario', text: 'Exportar planilha (CSV)', onclick: exportar }),
+      el('button', { text: 'Exportar análises (CSV)', onclick: exportarAnalises }),
       estado.podeAdministrar ? el('button', { text: p.estado.aceitando ? 'Encerrar prazo (bloquear alterações)' : 'Reabrir prazo', onclick: function () {
         var alvo = !p.estado.aceitando;
         if (!confirm(alvo ? 'Reabrir as alterações para todas as regionais?' : 'Encerrar o prazo? As regionais não poderão mais alterar os arranjos.')) return;
@@ -2065,6 +2086,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
      [soma('tecnicos_repetidos'), 'técnicos em mais de um arranjo']
     ]).forEach(function (k) { kpis.appendChild(el('div', { class: 'kpi' }, [el('b', { text: String(k[0]) }), el('span', { text: k[1] })])); });
     t.appendChild(kpis);
+    if (!reg && p.analises) t.appendChild(blocoVisaoGeral(p));
     if (RIO.ligado()) {
       var rioReg = el('details', { class: 'bloco', open: '' }, [el('summary', {}, [el('b', { text: reg ? 'O rio da regional' : 'O rio das regionais' }), reg ? ' · ilustrativo: cada canoa é um arranjo; as que estão na margem ainda estão incompletas' : ' · ilustrativo: cada braço é uma regional e cada canoa um arranjo; os números que valem são os desta página']), RIO.painel(p)]);
       t.appendChild(rioReg);
@@ -2181,7 +2203,9 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
 
   function desenharTelaAreas(d) {
     var t = $('telaPainel'); t.innerHTML = ''; estado.areasTela = d;
+    estado.regionaisLista = (d.areas[0] && d.areas[0].por_regional || []).map(function (x) { return x.regional; }).sort(function (a, b) { return a.localeCompare(b); });
     t.appendChild(el('div', { class: 'barra' }, [
+      estado.perfil === 'assessor' && estado.regionaisLista.length ? seletorRegionais(estado.regionaisLista, 'Analisar os arranjos de uma regional', abrirAnalise) : null,
       el('button', { text: 'Atualizar', onclick: carregarAreas }),
       el('span', { class: 'estado', text: d.estado.aceitando ? 'Regionais montando os arranjos: os números mudam até o fim do prazo' : 'Prazo encerrado' })
     ]));
@@ -2263,13 +2287,162 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
   }
 
   function exportar() {
-    api('exportarArranjos', estado.token).then(function (linhas) {
-      var csv = linhas.map(function (l) { return l.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(';'); }).join('\r\n');
-      var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
-      var a = el('a', { href: URL.createObjectURL(blob), download: 'arranjos-regionais-2027.csv' });
-      document.body.appendChild(a); a.click(); a.remove();
+    api('exportarArranjos', estado.token).then(function (linhas) { baixarCsv(linhas, 'arranjos-regionais-2027.csv'); }).catch(erroSessao);
+  }
+
+  // ---------- análise dos assessores (Etapa 2) ----------
+  // O assessor estadual abre cada regional, vê os arranjos e responde perguntas objetivas e descritivas.
+  // A DEPLAN e a gestão abrem a mesma tela para consultar os arranjos e todas as análises.
+  function seletorRegionais(nomes, rotulo, aoEscolher) {
+    return el('select', { 'aria-label': rotulo, onchange: function (ev) { if (ev.target.value) aoEscolher(ev.target.value); } },
+      [el('option', { value: '', text: rotulo + '…' })].concat(nomes.map(function (n) { return el('option', { value: n, text: n }); })));
+  }
+
+  function semAnalisePendente() {
+    if (estado.pendentes && !confirm('Há uma análise com alterações não salvas. Sair assim mesmo?')) return false;
+    estado.pendentes = 0; return true;
+  }
+
+  function abrirAnalise(reg) {
+    if (!semAnalisePendente()) return;
+    sinal('Carregando…');
+    Promise.all([api('carregarPainelRegional', estado.token, reg), api('carregarAnalises', estado.token, reg)]).then(function (r) {
+      sinal(''); mostrar('telaPainel'); desenharAnalise(r[0], r[1]); window.scrollTo(0, 0);
     }).catch(erroSessao);
   }
+
+  function voltarDaAnalise() { if (!semAnalisePendente()) return; if (estado.perfil === 'assessor') carregarAreas(); else carregarPainel(); }
+
+  function desenharAnalise(p, an) {
+    var t = $('telaPainel'); t.innerHTML = ''; estado.analiseTela = { p: p, an: an };
+    var r = p.resumo[0];
+    var minhas = an.analises.filter(function (x) { return x.matricula === an.eu; });
+    var nomes = estado.regionaisLista || [];
+    t.appendChild(el('div', { class: 'barra' }, [
+      el('button', { class: 'primario', text: estado.perfil === 'assessor' ? '← Painel das áreas' : '← Painel estadual', onclick: voltarDaAnalise }),
+      nomes.length ? seletorRegionais(nomes, 'Outra regional', abrirAnalise) : null,
+      el('button', { text: 'Atualizar', onclick: function () { abrirAnalise(p.regional); } }),
+      el('span', { class: 'estado', text: 'Regional ' + p.regional + ' · ' + (r.concluido ? 'concluída, pronta para análise' : 'ainda em montagem')
+        + ' · ' + p.arranjos.length + ' arranjo(s)' + (an.pode_analisar ? ' · você analisou ' + minhas.length : ' · ' + an.analises.length + ' análise(s)') })
+    ]));
+    if (!r.concluido) t.appendChild(el('div', { class: 'aviso' }, ['A regional ainda não concluiu a montagem: os arranjos podem mudar depois da sua análise.']));
+    if (!p.arranjos.length) t.appendChild(el('div', { class: 'bloco' }, [el('p', { text: 'Esta regional ainda não tem arranjos.' })]));
+    p.arranjos.forEach(function (a) { t.appendChild(cartaoAnalise(a, p, an)); });
+  }
+
+  function linhaInfo(rotulo, lista) {
+    return el('div', { class: 'info' }, [el('b', { text: rotulo + (lista.length ? ' (' + lista.length + ')' : '') + ': ' }), lista.length ? lista.join('; ') : '—']);
+  }
+
+  function cartaoAnalise(a, p, an) {
+    var c = el('div', { class: 'bloco analise' });
+    c.appendChild(el('h3', { text: a.nome + (a.psh ? ' · PSH' : '') }));
+    if (a.descricao) c.appendChild(el('p', { class: 'desc', text: a.descricao }));
+    var inds = {}; (p.indicadores_meta || []).forEach(function (i) { inds[i.codigo] = i.nome; });
+    var metasInst = Object.keys(a.metas_institucionais || {}).map(function (k) { return (inds[k] || k) + ': ' + fmtNum(a.metas_institucionais[k]); });
+    [['Cadeias produtivas', a.cadeias], ['Áreas transversais', a.transversais], ['Público', a.publicos], ['Municípios', a.municipios],
+     ['Equipe', a.tecnicos_nomes || []], ['Parceiros', a.parceiros], ['Metas institucionais assumidas', metasInst],
+     ['Metas do PPA e ODS atendidas', (a.metas || []).map(function (m) { return m.titulo; })]].forEach(function (l) { c.appendChild(linhaInfo(l[0], l[1])); });
+    var doArranjo = an.analises.filter(function (x) { return String(x.arranjo_id) === String(a.id); });
+    var minha = doArranjo.filter(function (x) { return x.matricula === an.eu; })[0];
+    if (an.pode_analisar) c.appendChild(formAnalise(a, an, minha));
+    var outras = doArranjo.filter(function (x) { return !an.pode_analisar || x.matricula !== an.eu; });
+    if (outras.length || !an.pode_analisar) {
+      var det = el('details', { class: 'outras' }, [el('summary', { text: (an.pode_analisar ? 'Análises de outros assessores' : 'Análises dos assessores') + ' (' + outras.length + ')' })]);
+      det.open = !an.pode_analisar; // a DEPLAN e a gestão abrem a tela para ler: já vem aberta
+      if (!outras.length) det.appendChild(el('p', { class: 'dica', text: 'Nenhum assessor analisou este arranjo ainda.' }));
+      outras.forEach(function (x) { det.appendChild(leituraAnalise(x, an)); });
+      c.appendChild(det);
+    }
+    return c;
+  }
+
+  function leituraAnalise(x, an) {
+    var quando = x.atualizado_em ? new Date(x.atualizado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+    var caixa = el('div', { class: 'leitura' }, [el('div', { class: 'quem' }, [el('b', { text: x.nome }), (x.area ? ' · ' + x.area : '') + (quando ? ' · ' + quando : '')])]);
+    an.perguntas.forEach(function (q) {
+      var v = (x.respostas || {})[q.codigo];
+      if (!v) return;
+      caixa.appendChild(el('div', { class: q.tipo === 'objetiva' ? 'resp-obj' : 'resp-desc' }, [el('span', { class: 'q', text: q.texto }), el('span', { class: 'v', text: v })]));
+    });
+    return caixa;
+  }
+
+  function formAnalise(a, an, minha) {
+    var resp = Object.assign({}, (minha && minha.respostas) || {});
+    var f = el('div', { class: 'form-analise' }, [el('h4', { text: 'Sua análise' })]);
+    an.perguntas.forEach(function (q, i) {
+      var id = 'q_' + a.id + '_' + q.codigo;
+      if (q.tipo === 'objetiva') {
+        var grupo = el('fieldset', { class: 'obj' + (q.codigo === 'parecer' ? ' parecer' : '') }, [el('legend', { text: q.texto })]);
+        q.opcoes.forEach(function (o, j) {
+          var inp = el('input', { type: 'radio', name: id, id: id + '_' + j, value: o });
+          if (resp[q.codigo] === o) inp.checked = true;
+          inp.addEventListener('change', function () { resp[q.codigo] = o; marcar(); });
+          grupo.appendChild(el('label', { for: id + '_' + j }, [inp, o]));
+        });
+        f.appendChild(grupo);
+      } else {
+        var ta = el('textarea', { id: id, maxlength: '2000', rows: '3' });
+        ta.value = resp[q.codigo] || '';
+        ta.addEventListener('input', function () { resp[q.codigo] = ta.value; marcar(); });
+        f.appendChild(el('div', { class: 'campo' }, [el('label', { for: id, text: q.texto }), ta]));
+      }
+    });
+    var st = el('span', { class: 'dica', text: minha ? 'Salva em ' + new Date(minha.atualizado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Ainda não salva' });
+    var btn = el('button', { class: 'primario', text: 'Salvar análise' });
+    function marcar() { st.textContent = 'Alterações não salvas'; estado.pendentes = 1; }
+    btn.addEventListener('click', function () {
+      btn.disabled = true; st.textContent = 'Salvando…';
+      api('salvarAnalise', estado.token, a.id, resp).then(function (r) {
+        estado.pendentes = 0;
+        st.textContent = r.vazia ? 'Análise apagada (sem respostas)' : 'Salva em ' + new Date(r.atualizado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+        avisar(r.vazia ? 'Análise apagada.' : 'Análise salva.');
+      }).catch(function (e) { st.textContent = 'Erro ao salvar'; erroSessao(e); }).then(function () { btn.disabled = false; });
+    });
+    f.appendChild(el('div', { class: 'rodape-card' }, [st, btn]));
+    return f;
+  }
+
+  // Visão geral para a DEPLAN: a montagem pelas regionais e a análise pelos assessores, lado a lado.
+  function blocoVisaoGeral(p) {
+    var porReg = {}; (p.analises || []).forEach(function (x) { porReg[x.regional] = x; });
+    var tab = el('table', {}, [el('tr', {}, ['Regional', 'Montagem', 'Arranjos', 'Analisados', 'Análises', 'Assessores', 'Adequado', 'Com ajustes', 'Rever', ''].map(function (h, i) {
+      return el('th', { class: i && i < 9 ? 'num' : '', text: h });
+    }))]);
+    var tot = { arranjos: 0, analisados: 0, analises: 0 };
+    p.resumo.forEach(function (x) {
+      var a = porReg[x.regional] || { arranjos: 0, analisados: 0, analises: 0, assessores: 0, pareceres: {} };
+      tot.arranjos += a.arranjos; tot.analisados += a.analisados; tot.analises += a.analises;
+      var pc = a.pareceres || {};
+      tab.appendChild(el('tr', {}, [
+        el('td', { text: x.regional }),
+        el('td', { class: 'num', text: x.concluido ? 'Concluída' : (x.arranjos ? 'Em montagem' : 'Não iniciada') }),
+        el('td', { class: 'num', text: String(a.arranjos) }),
+        el('td', { class: 'num', text: a.analisados + ' / ' + a.arranjos }),
+        el('td', { class: 'num', text: String(a.analises) }),
+        el('td', { class: 'num', text: String(a.assessores) }),
+        el('td', { class: 'num', text: String(pc['Adequado'] || 0) }),
+        el('td', { class: 'num', text: String(pc['Adequado com ajustes'] || 0) }),
+        el('td', { class: 'num', text: String(pc['Precisa ser revisto'] || 0) }),
+        el('td', {}, [x.arranjos ? el('button', { text: 'Ver arranjos e análises', onclick: function () { abrirAnalise(x.regional); } }) : null])
+      ]));
+    });
+    var concl = p.resumo.filter(function (x) { return x.concluido; }).length;
+    return el('div', { class: 'bloco' }, [
+      el('h3', { text: 'Visão geral: montagem pelas regionais e análise pelos assessores' }),
+      el('p', { class: 'dica', text: concl + ' de ' + p.resumo.length + ' regionais concluídas · ' + tot.analisados + ' de ' + tot.arranjos + ' arranjos com análise · ' + tot.analises + ' análise(s) no total' }),
+      tab
+    ]);
+  }
+
+  function baixarCsv(linhas, arquivo) {
+    var csv = linhas.map(function (l) { return l.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(';'); }).join('\r\n');
+    var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    var a = el('a', { href: URL.createObjectURL(blob), download: arquivo });
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+  function exportarAnalises() { api('exportarAnalises', estado.token).then(function (l) { baixarCsv(l, 'analises-assessores-2027.csv'); }).catch(erroSessao); }
 
   // ---------- eventos ----------
   $('btnEntrar').addEventListener('click', entrar);
