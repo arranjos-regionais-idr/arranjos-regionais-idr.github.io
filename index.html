@@ -52,6 +52,12 @@
   .campo { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
   .campo input, .campo select { padding: 8px; border: 1px solid var(--borda); border-radius: 6px; }
   .erro { color: var(--erro); min-height: 20px; }
+  .instrucoes { margin-top: 16px; padding: 12px 14px; border: 1px solid var(--borda); border-radius: 8px; font-size: 13px; line-height: 1.5; }
+  .instrucoes b.tit { display: block; margin-bottom: 4px; }
+  .instrucoes ul { margin: 0; padding-left: 18px; }
+  .instrucoes li { margin: 2px 0; }
+  .admin-senha { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .admin-senha input { width: 110px; padding: 6px; border: 1px solid var(--borda); border-radius: 6px; }
 
   /* Montagem */
   #telaMontagem { display: grid; grid-template-columns: 320px 1fr; flex: 1; min-height: 0; }
@@ -244,7 +250,7 @@
     .grade { grid-template-columns: 1fr; }
   }
 </style>
-<script>window.API_URL = "https://script.google.com/macros/s/AKfycbz7SbwrUPePl_m-6q6rjYw5qhx8p0jI6rV3CavE1VrZDC6dsJtIELQ950g0EvTYX9_PNQ/exec";</script>
+<script>window.API_URL = "https://cviaqajhzdvvykbdimyr.supabase.co/functions/v1/api"; window.AUTH_URL = "https://cviaqajhzdvvykbdimyr.supabase.co"; window.AUTH_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN2aWFxYWpoemR2dnlrYmRpbXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUxMDc1ODksImV4cCI6MjExMDY4MzU4OX0.4fbeb9eAgito8fk7B64KPPJJGwauCQri9u65UZIMzCI";</script>
 </head>
 <body>
 <header>
@@ -266,17 +272,43 @@
   <div class="cartao-entrada">
     <div class="logo-entrada so-rio"><img id="logoEntrada" alt="IDR-Paraná"><b>IDR-Paraná</b></div>
     <h2>Montagem dos arranjos regionais</h2>
-    <p>Escolha a sua regional e informe o código recebido da DEPLAN.</p>
-    <div class="campo">
-      <label for="selRegional">Regional</label>
-      <select id="selRegional"><option value="">Carregando…</option></select>
+    <div id="formEntrada">
+      <p>Entre com a sua matrícula e a sua senha.</p>
+      <div class="campo">
+        <label for="inpMatricula">Matrícula</label>
+        <input id="inpMatricula" inputmode="numeric" autocomplete="username" maxlength="12" placeholder="Ex.: 12345">
+      </div>
+      <div class="campo">
+        <label for="inpSenha">Senha</label>
+        <input id="inpSenha" type="password" autocomplete="current-password">
+      </div>
+      <div class="erro" id="erroEntrada" role="alert"></div>
+      <button class="primario" id="btnEntrar" style="width:100%">Entrar</button>
+      <div class="instrucoes">
+        <b class="tit">Primeiro acesso</b>
+        <ul>
+          <li>A senha inicial é a sua <b>matrícula de trás para frente</b>. Exemplo: matrícula 12345, senha 54321.</li>
+          <li>Ao entrar, o sistema pede que você grave a sua <b>senha definitiva</b> (pelo menos 8 caracteres, sem a matrícula).</li>
+          <li>A senha inicial vale <b>15 dias</b>. Venceu ou esqueceu a senha? Peça à DEPLAN para voltar à senha inicial.</li>
+          <li>Já gravou a senha definitiva no <b>DataGeo</b>? Entre aqui com ela. Se ainda não gravou, a senha definitiva que você gravar aqui passa a valer lá também.</li>
+          <li>O chefe e os assessores regionais editam os arranjos da regional; os demais servidores consultam.</li>
+        </ul>
+      </div>
     </div>
-    <div class="campo">
-      <label for="inpCodigo">Código de acesso</label>
-      <input id="inpCodigo" autocomplete="off" placeholder="XXXX-XXXX" maxlength="9">
+    <div id="formSenha" class="oculto">
+      <p id="txtSenha">Este é o seu primeiro acesso. Grave a sua senha definitiva para continuar.</p>
+      <div class="campo">
+        <label for="inpNova">Senha definitiva</label>
+        <input id="inpNova" type="password" autocomplete="new-password">
+      </div>
+      <div class="campo">
+        <label for="inpRepete">Repita a senha</label>
+        <input id="inpRepete" type="password" autocomplete="new-password">
+      </div>
+      <div class="dica">Pelo menos 8 caracteres. Não use a matrícula, nem de trás para frente.</div>
+      <div class="erro" id="erroSenha" role="alert"></div>
+      <button class="primario" id="btnGravarSenha" style="width:100%">Gravar senha e entrar</button>
     </div>
-    <div class="erro" id="erroEntrada" role="alert"></div>
-    <button class="primario" id="btnEntrar" style="width:100%">Entrar</button>
   </div>
 </section>
 
@@ -296,6 +328,7 @@
   </aside>
   <main>
     <div class="barra">
+      <button id="btnVoltarPainel" class="oculto">← Painel estadual</button>
       <button class="primario" id="btnNovo">+ Novo arranjo</button>
       <button id="btnConferir">Conferência</button>
       <button id="btnPanorama" title="Resumo da regional: cobertura, equipe, metas e uso das cadeias e áreas">Panorama da regional</button>
@@ -1342,15 +1375,25 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
   }
 
   // ---------- entrada ----------
+  // Login individual pela matrícula no Supabase Auth (window.AUTH_URL e AUTH_KEY vêm do montar_site.py).
+  // Na prévia local, a simulação (dev/mock.js) faz o papel do Auth.
+  var PREFIXO_SENHA = 'dgp:', DOMINIO = 'arranjos.local';
+  function autenticar(matricula, senha) {
+    if (!window.AUTH_URL) return api('entrar', matricula, senha);
+    return fetch(window.AUTH_URL + '/auth/v1/token?grant_type=password', {
+      method: 'POST', headers: { apikey: window.AUTH_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: matricula + '@' + DOMINIO, password: PREFIXO_SENHA + senha })
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (x) {
+      if (!x.ok || !x.j.access_token) {
+        if (x.j && /banned/i.test(x.j.msg || x.j.error_description || '')) throw new Error('Conta bloqueada. Fale com a DEPLAN.');
+        throw new Error('Matrícula ou senha incorreta.');
+      }
+      var token = x.j.access_token;
+      return api('minhaSessao', token).then(function (s) { s.token = token; return s; });
+    }, function () { throw new Error('Sem conexão com o servidor. Tente de novo.'); });
+  }
+
   function iniciar() {
-    api('listarRegionais').then(function (lista) {
-      var sel = $('selRegional');
-      sel.innerHTML = '';
-      sel.appendChild(el('option', { value: '', text: 'Selecione…' }));
-      lista.forEach(function (r) { sel.appendChild(el('option', { value: r, text: r })); });
-      sel.appendChild(el('option', { value: '__DEPLAN__', text: 'DEPLAN (painel estadual)' }));
-      sel.appendChild(el('option', { value: '__ASSESSORES__', text: 'Assessores estaduais (painel das áreas)' }));
-    }).catch(function (e) { $('erroEntrada').textContent = e.message; });
     try {
       var salvo = JSON.parse(sessionStorage.getItem('arranjos_sessao') || 'null');
       if (salvo && salvo.token) entrarCom(salvo);
@@ -1358,36 +1401,87 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
   }
 
   function entrar() {
-    var regional = $('selRegional').value;
-    var codigo = $('inpCodigo').value.trim();
+    var matricula = $('inpMatricula').value.trim(), senha = $('inpSenha').value;
     $('erroEntrada').textContent = '';
-    if (!regional || !codigo) { $('erroEntrada').textContent = 'Escolha a regional e informe o código.'; return; }
+    if (!/^\d{2,12}$/.test(matricula) || !senha) { $('erroEntrada').textContent = 'Informe a matrícula (só números) e a senha.'; return; }
     $('btnEntrar').disabled = true; $('btnEntrar').textContent = 'Entrando…';
-    api('entrar', regional, codigo).then(function (s) {
-      try { sessionStorage.setItem('arranjos_sessao', JSON.stringify(s)); } catch (e) { /* ok */ }
+    autenticar(matricula, senha).then(function (s) {
+      $('inpSenha').value = '';
+      guardarSessao(s);
       entrarCom(s);
     }).catch(function (e) { $('erroEntrada').textContent = e.message; })
       .then(function () { $('btnEntrar').disabled = false; $('btnEntrar').textContent = 'Entrar'; });
   }
 
+  function guardarSessao(s) { try { sessionStorage.setItem('arranjos_sessao', JSON.stringify(s)); } catch (e) { /* ok */ } }
+  function formEntrada(qual) {
+    $('formEntrada').classList.toggle('oculto', qual !== 'entrada');
+    $('formSenha').classList.toggle('oculto', qual !== 'senha');
+  }
+
+  function gravarSenha() {
+    var nova = $('inpNova').value, repete = $('inpRepete').value;
+    $('erroSenha').textContent = '';
+    if (nova.length < 8) { $('erroSenha').textContent = 'A senha precisa de pelo menos 8 caracteres.'; return; }
+    if (nova !== repete) { $('erroSenha').textContent = 'As senhas não conferem.'; return; }
+    $('btnGravarSenha').disabled = true;
+    // Trocar a senha encerra a sessão no Auth: entra de novo com a senha nova.
+    var noDatageo = false;
+    api('trocarSenha', estado.token, nova).then(function (r) {
+      noDatageo = !!(r && r.datageo);
+      $('inpNova').value = ''; $('inpRepete').value = '';
+      return autenticar(estado.matricula, nova);
+    }).then(function (s) {
+      guardarSessao(s); avisar(noDatageo ? 'Senha definitiva gravada. Ela vale também no DataGeo.' : 'Senha definitiva gravada.'); entrarCom(s);
+    }).catch(function (e) { $('erroSenha').textContent = e.message; })
+      .then(function () { $('btnGravarSenha').disabled = false; });
+  }
+
   function entrarCom(s) {
-    estado.token = s.token; estado.perfil = s.perfil; estado.regional = s.regional;
-    if (s.perfil === 'deplan') { $('cabRegional').textContent = 'DEPLAN · painel estadual'; carregarPainel(); return; }
-    if (s.perfil === 'assessor') { $('cabRegional').textContent = 'Assessores estaduais · painel das áreas'; carregarAreas(); return; }
-    $('cabRegional').textContent = 'Regional ' + s.regional;
+    estado.token = s.token; estado.perfil = s.perfil; estado.regional = s.regional; estado.matricula = s.matricula;
+    estado.podeAdministrar = s.pode_administrar !== false; // DEPLAN; a Diretoria e os chefes de departamento só consultam
+    if (s.senha === 'vencida') { sair(); $('erroEntrada').textContent = 'A senha inicial venceu (vale 15 dias). Peça à DEPLAN para liberar de novo.'; return; }
+    if (s.senha === 'trocar') { mostrar('telaEntrada'); formEntrada('senha'); $('btnSair').classList.remove('oculto'); $('inpNova').focus(); return; }
+    if (s.perfil === 'sem_acesso') { sair(); $('erroEntrada').textContent = 'Seu acesso ainda não foi liberado. Fale com a DEPLAN.'; return; }
+    formEntrada('entrada');
+    var quem = s.nome ? ' · ' + s.nome : '';
+    if (s.perfil === 'deplan') { $('cabRegional').textContent = (estado.podeAdministrar ? 'DEPLAN' : 'Gestão') + ' · painel estadual' + quem; carregarPainel(); return; }
+    if (s.perfil === 'assessor') { $('cabRegional').textContent = 'Assessores estaduais · painel das áreas' + quem; carregarAreas(); return; }
+    $('cabRegional').textContent = 'Regional ' + s.regional + quem;
     sinal('Carregando…');
-    api('carregarRegional', s.token).then(function (d) {
+    api('carregarRegional', s.token).then(mostrarMontagem).catch(erroSessao);
+  }
+
+  // DEPLAN vê todas as telas: abre a montagem de qualquer regional, só consultando.
+  function verRegional(reg) {
+    if (!reg) return;
+    estado.regionalVista = reg; estado.ativo = null; estado.abertos = {};
+    $('cabRegional').textContent = 'DEPLAN · consultando a Regional ' + reg;
+    sinal('Carregando…');
+    api('carregarRegional', estado.token, reg).then(mostrarMontagem).catch(erroSessao);
+  }
+  function voltarPainelEstadual() {
+    estado.regionalVista = null; estado.dados = null; estado.ativo = null; estado.painel = null;
+    $('avisoPrazo').classList.add('oculto');
+    $('cabRegional').textContent = (estado.podeAdministrar ? 'DEPLAN' : 'Gestão') + ' · painel estadual';
+    carregarPainel();
+  }
+
+  function mostrarMontagem(d) {
+    {
       estado.dados = d; sinal('');
+      $('btnVoltarPainel').classList.toggle('oculto', !estado.regionalVista);
       d.arranjos.forEach(function (a) { a.itens.parceiro = a.itens.parceiro || []; a.metas = a.metas || {}; a._lancado = !faltaDe(a).length; }); // completos já salvos começam no rio
       mostrar('telaMontagem');
       avisoPrazo(d.estado);
       desenharTudo();
-    }).catch(erroSessao);
+    }
   }
 
   function erroSessao(e) {
     sinal('');
     if (/Sessão expirada/.test(e.message)) { sair(); $('erroEntrada').textContent = e.message; }
+    else if (/Troque a senha/.test(e.message)) { mostrar('telaEntrada'); formEntrada('senha'); }
     else avisar(e.message, true);
   }
 
@@ -1395,6 +1489,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     try { sessionStorage.removeItem('arranjos_sessao'); } catch (e) { /* ok */ }
     estado.token = null; estado.ativo = null; estado.dados = null; estado.abertos = {}; estado.painel = null; estado.areasTela = null; $('cabRegional').textContent = ''; sinal('');
     $('avisoPrazo').classList.add('oculto');
+    formEntrada('entrada');
     mostrar('telaEntrada');
   }
 
@@ -1409,7 +1504,8 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
   }
 
   // Regional concluída fica travada para a análise; só a DEPLAN reabre.
-  function bloqueado() { return !estado.dados.estado.aceitando || !!estado.dados.concluido; }
+  // Quem não é chefe nem assessor regional só consulta (pode_editar vem da API).
+  function bloqueado() { return !estado.dados.estado.aceitando || !!estado.dados.concluido || estado.dados.pode_editar === false; }
 
   // ---------- catálogos e contagem de uso ----------
   function catalogo(tipo) {
@@ -1603,7 +1699,8 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
 
   function desenharEstado() {
     var d = estado.dados;
-    $('estadoRegional').textContent = d.arranjos.length + ' arranjo(s)' + (d.concluido ? ' · regional concluída, em análise (para alterar, peça à DEPLAN que reabra)' : '');
+    $('estadoRegional').textContent = d.arranjos.length + ' arranjo(s)' + (d.concluido ? ' · regional concluída, em análise (para alterar, peça à DEPLAN que reabra)' : '')
+      + (d.pode_editar === false ? ' · você consulta; quem edita são o chefe e os assessores regionais' : '');
     $('btnConcluir').textContent = d.concluido ? 'Enviada para análise' : 'Concluir e enviar para análise';
     ['btnNovo', 'btnConcluir'].forEach(function (b) { $(b).disabled = bloqueado(); });
   }
@@ -1907,9 +2004,20 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
   function carregarPanorama() {
     if (temPendencias()) { avisar('Aguarde salvar as alterações antes de abrir o panorama.'); return; }
     sinal('Carregando…');
-    api('carregarPainelRegional', estado.token).then(function (p) { sinal(''); mostrar('telaPainel'); desenharPainel(p); window.scrollTo(0, 0); }).catch(erroSessao);
+    api('carregarPainelRegional', estado.token, estado.regionalVista).then(function (p) { sinal(''); mostrar('telaPainel'); desenharPainel(p); window.scrollTo(0, 0); }).catch(erroSessao);
   }
   function voltarMontagem() { estado.painel = null; mostrar('telaMontagem'); desenharTudo(); }
+
+  // DEPLAN: volta a senha de um servidor à inicial (matrícula invertida, vale 15 dias).
+  function formSenhaInicial() {
+    var inp = el('input', { inputmode: 'numeric', placeholder: 'Matrícula', 'aria-label': 'Matrícula para voltar à senha inicial' });
+    return el('span', { class: 'admin-senha' }, ['Senha inicial:', inp, el('button', { text: 'Liberar', onclick: function () {
+      var m = inp.value.trim();
+      if (!/^\d{2,12}$/.test(m)) { avisar('Informe a matrícula (só números).', true); return; }
+      if (!confirm('Voltar a senha da matrícula ' + m + ' para a inicial (matrícula de trás para frente, vale 15 dias)?')) return;
+      api('resetarSenha', estado.token, m).then(function (r) { inp.value = ''; avisar('Senha de ' + r.nome + ' voltou à inicial. Vale 15 dias.'); }).catch(erroSessao);
+    } })]);
+  }
 
   function barraPanorama(p) {
     var r = p.resumo[0];
@@ -1936,13 +2044,16 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     var r = p.resumo, soma = function (k) { return r.reduce(function (s, x) { return s + x[k]; }, 0); };
     var barra = reg ? barraPanorama(p) : el('div', { class: 'barra' }, [
       el('button', { class: 'primario', text: 'Exportar planilha (CSV)', onclick: exportar }),
-      el('button', { text: p.estado.aceitando ? 'Encerrar prazo (bloquear alterações)' : 'Reabrir prazo', onclick: function () {
+      estado.podeAdministrar ? el('button', { text: p.estado.aceitando ? 'Encerrar prazo (bloquear alterações)' : 'Reabrir prazo', onclick: function () {
         var alvo = !p.estado.aceitando;
         if (!confirm(alvo ? 'Reabrir as alterações para todas as regionais?' : 'Encerrar o prazo? As regionais não poderão mais alterar os arranjos.')) return;
         api('definirAceite', estado.token, alvo).then(carregarPainel).catch(erroSessao);
-      } }),
+      } }) : null,
       el('button', { text: 'Atualizar', onclick: carregarPainel }),
-      el('span', { class: 'estado', text: p.estado.aceitando ? 'Recebendo alterações' : 'Prazo encerrado' })
+      estado.podeAdministrar ? el('select', { 'aria-label': 'Abrir a montagem de uma regional', onchange: function (ev) { verRegional(ev.target.value); } },
+        [el('option', { value: '', text: 'Ver a montagem de uma regional…' })].concat(r.map(function (x) { return el('option', { value: x.regional, text: x.regional }); }))) : null,
+      el('span', { class: 'estado', text: p.estado.aceitando ? 'Recebendo alterações' : 'Prazo encerrado' }),
+      estado.podeAdministrar ? formSenhaInicial() : null
     ]);
     t.appendChild(barra);
     var kpis = el('div', { class: 'kpis' });
@@ -1969,7 +2080,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
         el('td', { class: 'num', text: x.municipios_cobertos + ' / ' + x.municipios_total }),
         el('td', { class: 'num', text: x.tecnicos_alocados + ' / ' + x.tecnicos_total }),
         el('td', { class: 'num', text: String(x.tecnicos_repetidos) }),
-        el('td', { class: 'num' }, x.concluido ? ['Concluída ', el('button', { text: 'Reabrir', title: 'Devolve a regional para a montagem', onclick: function () {
+        el('td', { class: 'num' }, x.concluido ? ['Concluída ', !estado.podeAdministrar ? null : el('button', { text: 'Reabrir', title: 'Devolve a regional para a montagem', onclick: function () {
           if (!confirm('Reabrir a regional ' + x.regional + '? Ela volta a poder alterar os arranjos e precisará concluir de novo.')) return;
           api('reabrirRegional', estado.token, x.regional).then(carregarPainel).catch(erroSessao);
         } })] : [x.arranjos ? 'Em montagem' : 'Não iniciada'])
@@ -2162,7 +2273,10 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
 
   // ---------- eventos ----------
   $('btnEntrar').addEventListener('click', entrar);
-  $('inpCodigo').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') entrar(); });
+  ['inpMatricula', 'inpSenha'].forEach(function (id) { $(id).addEventListener('keydown', function (ev) { if (ev.key === 'Enter') entrar(); }); });
+  $('btnGravarSenha').addEventListener('click', gravarSenha);
+  $('btnVoltarPainel').addEventListener('click', voltarPainelEstadual);
+  $('inpRepete').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') gravarSenha(); });
   $('btnSair').addEventListener('click', sair);
   $('btnPanorama').addEventListener('click', carregarPanorama);
   $('btnModo').addEventListener('click', trocarModo);
