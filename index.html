@@ -61,6 +61,12 @@
   .analise h3 { margin: 0 0 4px; }
   .analise .desc { color: var(--suave); margin: 0 0 8px; }
   .analise .info { margin: 3px 0; font-size: 13px; line-height: 1.45; }
+  .relatorio-cab h2 { margin: 0 0 4px; font-size: 18px; }
+  @media print {
+    header, .barra, #avisos, .toast { display: none !important; }
+    body { background: #fff; }
+    .bloco { break-inside: avoid; box-shadow: none; border: 1px solid #bbb; }
+  }
   .form-analise { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--borda); }
   .form-analise h4 { margin: 0 0 8px; }
   .form-analise fieldset.obj { border: 0; padding: 0; margin: 0 0 10px; }
@@ -351,6 +357,7 @@
       <button class="primario" id="btnNovo">+ Novo arranjo</button>
       <button id="btnConferir">Conferência</button>
       <button id="btnPanorama" title="Resumo da regional: cobertura, equipe, metas e uso das cadeias e áreas">Panorama da regional</button>
+      <button id="btnRelatorio" title="Os arranjos que a regional enviou, um por página, para consultar ou imprimir">Relatório dos arranjos</button>
       <button id="btnConcluir">Marcar regional como concluída</button>
       <span class="estado" id="estadoRegional"></span>
     </div>
@@ -2204,6 +2211,44 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     t.appendChild(el('div', { class: 'bloco' }, [el('h3', { text: (reg ? 'Arranjos da regional (' : 'Todos os arranjos (') + p.arranjos.length + ')' }), ta]));
   }
 
+  // ---------- relatório dos arranjos enviados (regional) ----------
+  // O que a regional montou, arranjo por arranjo, para consultar a qualquer momento (também depois de concluir) e imprimir.
+  function carregarRelatorio() {
+    if (temPendencias()) { avisar('Aguarde salvar as alterações antes de abrir o relatório.'); return; }
+    sinal('Carregando…');
+    api('carregarPainelRegional', estado.token, estado.regionalVista).then(function (p) { sinal(''); mostrar('telaPainel'); desenharRelatorio(p); window.scrollTo(0, 0); }).catch(erroSessao);
+  }
+
+  function desenharRelatorio(p) {
+    var t = $('telaPainel'); t.innerHTML = ''; estado.painel = p;
+    var r = p.resumo[0];
+    var situacao = r.concluido ? 'concluída (enviada para análise)' : p.estado.aceitando ? 'em montagem' : 'prazo encerrado';
+    t.appendChild(el('div', { class: 'barra' }, [
+      el('button', { class: 'primario', text: '← Voltar aos arranjos', onclick: voltarMontagem }),
+      el('button', { text: 'Imprimir ou salvar em PDF', onclick: function () { window.print(); } }),
+      el('button', { text: 'Atualizar', onclick: carregarRelatorio }),
+      el('span', { class: 'estado', text: 'Regional ' + p.regional + ' · ' + situacao })
+    ]));
+    var quando = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    t.appendChild(el('div', { class: 'bloco relatorio-cab' }, [
+      el('h2', { text: 'Arranjos Regionais 2027 · Regional ' + p.regional }),
+      el('p', { class: 'dica', text: p.arranjos.length + ' arranjo(s) · situação: ' + situacao + ' · ' + r.municipios_cobertos + ' de ' + r.municipios_total
+        + ' municípios cobertos · ' + r.tecnicos_alocados + ' de ' + r.tecnicos_total + ' técnicos da regional em algum arranjo · gerado em ' + quando })
+    ]));
+    if (!p.arranjos.length) t.appendChild(el('div', { class: 'bloco' }, [el('p', { text: 'A regional ainda não tem arranjos.' })]));
+    var inds = {}; (p.indicadores_meta || []).forEach(function (i) { inds[i.codigo] = i.nome; });
+    p.arranjos.forEach(function (a) {
+      var c = el('div', { class: 'bloco analise' }, [el('h3', { text: a.nome + (a.psh ? ' · PSH' : '') })]);
+      if (a.descricao) c.appendChild(el('p', { class: 'desc', text: a.descricao }));
+      var metasInst = Object.keys(a.metas_institucionais || {}).filter(function (k) { return Number(a.metas_institucionais[k]); })
+        .map(function (k) { return (inds[k] || k) + ': ' + fmtNum(a.metas_institucionais[k]); });
+      [['Cadeias produtivas', a.cadeias], ['Áreas transversais', a.transversais], ['Público', a.publicos], ['Municípios', a.municipios],
+       ['Equipe', a.tecnicos_nomes || []], ['Parceiros', a.parceiros], ['Metas institucionais assumidas', metasInst],
+       ['Metas do PPA e ODS atendidas', (a.metas || []).map(function (m) { return m.titulo; })]].forEach(function (l) { c.appendChild(linhaInfo(l[0], l[1])); });
+      t.appendChild(c);
+    });
+  }
+
   // ---------- painel das cadeias e áreas (assessores estaduais; também no painel da DEPLAN) ----------
   function carregarAreas() {
     sinal('Carregando…');
@@ -2212,13 +2257,19 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
 
   function desenharTelaAreas(d) {
     var t = $('telaPainel'); t.innerHTML = ''; estado.areasTela = d;
-    estado.regionaisLista = (d.areas[0] && d.areas[0].por_regional || []).map(function (x) { return x.regional; }).sort(function (a, b) { return a.localeCompare(b); });
+    // O assessor recebe só as suas cadeias e áreas: a lista de regionais fica com as que têm arranjos delas.
+    var comArranjo = {};
+    d.areas.forEach(function (a) { a.por_regional.forEach(function (x) { if (x.arranjos || !d.so_meus_assuntos) comArranjo[x.regional] = true; }); });
+    estado.regionaisLista = Object.keys(comArranjo).sort(function (a, b) { return a.localeCompare(b); });
     t.appendChild(el('div', { class: 'barra' }, [
       estado.perfil === 'assessor' && estado.regionaisLista.length ? seletorRegionais(estado.regionaisLista, 'Analisar os arranjos de uma regional', abrirAnalise) : null,
       el('button', { text: 'Atualizar', onclick: carregarAreas }),
       el('span', { class: 'estado', text: d.estado.aceitando ? 'Regionais montando os arranjos: os números mudam até o fim do prazo' : 'Prazo encerrado' })
     ]));
     var nReg = (d.areas[0] && d.areas[0].por_regional.length) || 0;
+    if (d.so_meus_assuntos) t.appendChild(el('div', { class: 'aviso' }, [d.areas.length
+      ? 'Você vê os arranjos que têm ' + d.areas.map(function (a) { return a.nome; }).join(', ') + '. A correspondência entre assessores e cadeias ou áreas é mantida pela DEPLAN.'
+      : 'Nenhuma cadeia ou área foi atribuída a você ainda. Fale com a DEPLAN.']));
     t.appendChild(blocoAreas(d.areas, nReg));
   }
 
@@ -2461,6 +2512,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
   $('inpRepete').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') gravarSenha(); });
   $('btnSair').addEventListener('click', sair);
   $('btnPanorama').addEventListener('click', carregarPanorama);
+  $('btnRelatorio').addEventListener('click', carregarRelatorio);
   $('btnModo').addEventListener('click', trocarModo);
   $('btnSom').addEventListener('click', function () { TRILHA.alternar(); botaoSom(); });
   botaoSom(); TRILHA.armar();
