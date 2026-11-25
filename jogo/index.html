@@ -340,7 +340,7 @@
 
   // ---------- rio visto de cima: a canoa sobe o rio desviando de pedras, troncos e redemoinhos ----------
   const centro = y => 224 + 70 * Math.sin(y * .0031) + 26 * Math.sin(y * .011 + 1);
-  const meia = y => 60 + 12 * Math.sin(y * .007 + 2);
+  const meia = y => 80 + 12 * Math.sin(y * .007 + 2); // rio mais largo: a canoa inclinada ocupa mais espaço
   function montarCurso() {
     const IH = LEN + H, c = document.createElement('canvas'); c.width = W; c.height = IH;
     const b = c.getContext('2d'), img = b.createImageData(W, IH), d = img.data;
@@ -383,26 +383,47 @@
   function telaRio() {
     fase = 'rio'; telaTam(448, K.H); $('camada').innerHTML = '';
     const sp = spec();
-    rio = { d: 0, x: centro(LEN + H - 40), batidas: 0, inv: 0, giro: 0, obs: [], prox: LEN - 40, curso: montarCurso(), canoa: [0, 1].map(q => canoaCima(sp, q)), respingos: [] };
-    $('cartao').innerHTML = '<h2>Rio acima, até o vilarejo</h2><p>← → desviam a canoa. ↑ rema mais forte, ↓ segura. Cuidado com pedras, troncos e redemoinhos.</p><div class="progresso"><i id="barra"></i></div><p id="placar">Batidas: 0</p>';
+    rio = { d: 0, x: centro(LEN + H - 40), ang: 0, batidas: 0, inv: 0, giro: 0, obs: [], prox: LEN - 40, curso: montarCurso(), canoa: [0, 1].map(q => canoaCima(sp, q)), respingos: [] };
+    $('cartao').innerHTML = '<h2>Rio acima, até o vilarejo</h2><p>← → viram a proa da canoa, e ela segue para onde aponta. ↑ rema mais forte, ↓ segura. Cuidado com pedras, troncos e redemoinhos.</p><div class="progresso"><i id="barra"></i></div><p id="placar">Batidas: 0</p>';
     $('fala').textContent = ''; $('balcao').innerHTML = '';
+  }
+  const ANG_MAX = .45, RAIO = { tronco: [17, 5], pedra: [9, 6], redemoinho: [7, 6], aguape: [8, 5] };
+  const angCanoa = R => R.ang + (R.giro > 0 ? Math.sin(t * 10) * .45 : 0);
+  // sorteia o x do obstáculo sem fechar o rio: perto de outro na mesma altura, ou fica colado nele
+  // (vira um obstáculo só) ou deixa passagem para a canoa inclinada; nunca uma fresta estreita demais
+  function posObstaculo(R, oy, tipo, c0) {
+    const passo = 2 * (c0.hw + c0.L / 2 * Math.sin(ANG_MAX) * .5) + 10;
+    let x;
+    for (let i = 0; i < 8; i++) {
+      x = centro(oy) + (Math.random() * 2 - 1) * (meia(oy) - 16);
+      const ok = R.obs.every(o => Math.abs(o.y - oy) > c0.L + 10 || (v => v < 0 || v > passo)(Math.abs(o.x - x) - RAIO[o.tipo][0] - RAIO[tipo][0]));
+      if (ok) break;
+    }
+    return x;
   }
   function atualizaRio(dt) {
     const R = rio, vel = (teclas.ArrowUp ? 72 : teclas.ArrowDown ? 26 : 46) * (R.giro > 0 ? .35 : 1);
-    R.d = Math.min(LEN, R.d + vel * dt); R.inv = Math.max(0, R.inv - dt); R.giro = Math.max(0, R.giro - dt);
+    // a canoa não anda de lado: ← → viram a proa, e ela segue para onde aponta (com inércia, como no rio de verdade)
+    const leme = (teclas.ArrowRight ? 1 : 0) - (teclas.ArrowLeft ? 1 : 0);
+    R.ang += (leme * ANG_MAX - R.ang) * Math.min(1, dt * (leme ? 3.2 : 2.2));
+    const a = angCanoa(R);
+    R.d = Math.min(LEN, R.d + vel * Math.cos(a) * dt); R.inv = Math.max(0, R.inv - dt); R.giro = Math.max(0, R.giro - dt);
     const topo = LEN - R.d, yC = topo + H - 44, cc = centro(yC), m = meia(yC), c0 = R.canoa[0];
-    R.x += ((teclas.ArrowRight ? 1 : 0) - (teclas.ArrowLeft ? 1 : 0)) * 80 * dt + (R.giro > 0 ? Math.sin(t * 10) * 50 * dt : 0);
-    if (Math.abs(R.x - cc) > m - c0.hw - 4) R.x = cc + Math.sign(R.x - cc) * (m - c0.hw - 4); // a margem segura a canoa
+    R.x += Math.sin(a) * (vel + 100) * dt;
+    const lat = c0.hw * Math.cos(a) + c0.L / 2 * Math.abs(Math.sin(a)); // meia largura da canoa inclinada
+    if (Math.abs(R.x - cc) > m - lat - 4) { R.x = cc + Math.sign(R.x - cc) * (m - lat - 4); R.ang *= .6; } // a margem segura e endireita a canoa
     if (topo < R.prox && topo > 120) {
       const oy = topo - 30, k = Math.random(), tipo = k < .42 ? 'pedra' : k < .74 ? 'tronco' : k < .88 ? 'redemoinho' : 'aguape';
-      R.obs.push({ y: oy, x: centro(oy) + (Math.random() * 2 - 1) * (meia(oy) - 16), tipo, v: Math.random() < .5 ? 0 : 1 });
-      R.prox = topo - (52 + Math.random() * 44 - Math.min(22, R.d / 110));
+      R.obs.push({ y: oy, x: posObstaculo(R, oy, tipo, c0), tipo, v: Math.random() < .5 ? 0 : 1 });
+      R.prox = topo - (46 + Math.random() * 40 - Math.min(20, R.d / 110));
     }
     R.obs = R.obs.filter(o => o.y - topo < H + 30);
     R.obs.forEach(o => {
       if (o.tipo === 'tronco') o.y += 9 * dt; // o tronco desce com a correnteza
-      const dy = Math.abs(o.y - yC), dx = Math.abs(o.x - R.x), rx = o.tipo === 'tronco' ? 17 : o.tipo === 'pedra' ? 9 : 7, ry = o.tipo === 'tronco' ? 5 : 6;
-      if (o.tocou || o.tipo === 'aguape' || dx > rx + c0.hw || dy > ry + c0.L / 2) return;
+      // colisão no referencial da canoa inclinada: eixo do través (lat) e eixo da proa (pro)
+      const dx = o.x - R.x, dy = o.y - yC, co = Math.cos(a), si = Math.sin(a), [rx, ry] = RAIO[o.tipo];
+      const lt = Math.abs(dx * co + dy * si), pr = Math.abs(dx * si - dy * co);
+      if (o.tocou || o.tipo === 'aguape' || lt > rx * Math.abs(co) + ry * Math.abs(si) + c0.hw || pr > rx * Math.abs(si) + ry * Math.abs(co) + c0.L / 2) return;
       o.tocou = true;
       if (o.tipo === 'redemoinho') { R.giro = 1.3; $('fala').textContent = 'Redemoinho! A canoa gira e perde força.'; return; }
       if (R.inv > 0) return;
@@ -429,12 +450,11 @@
     });
     // canoa: rastro, sombra e o quadro da remada
     const c = R.canoa[Math.floor(t * 3) % 2], yC = H - 44, x = Math.round(R.x);
-    g.fillStyle = '#e8f8ff'; for (let k = 1; k < 8; k++) { g.globalAlpha = .55 - k * .06; g.fillRect(x - c.hw - 1 - k, yC + c.L / 2 + k * 3, 2, 1); g.fillRect(x + c.hw + k, yC + c.L / 2 + k * 3, 2, 1); } g.globalAlpha = 1;
-    K.sombra(g, x + 3, yC + 3, c.hw + 3, c.L / 2, .22);
-    if (!(R.inv > 0 && Math.floor(t * 12) % 2)) {
-      g.save(); g.translate(x, yC); if (R.giro > 0) g.rotate(Math.sin(t * 10) * .45);
-      g.drawImage(c.img, -c.img.width / 2 | 0, -c.img.height / 2 | 0); g.restore();
-    }
+    g.save(); g.translate(x, yC); g.rotate(angCanoa(R)); // rastro e sombra acompanham a proa
+    g.fillStyle = '#e8f8ff'; for (let k = 1; k < 8; k++) { g.globalAlpha = .55 - k * .06; g.fillRect(-c.hw - 1 - k, c.L / 2 + k * 3, 2, 1); g.fillRect(c.hw + k, c.L / 2 + k * 3, 2, 1); } g.globalAlpha = 1;
+    K.sombra(g, 3, 3, c.hw + 3, c.L / 2, .22);
+    if (!(R.inv > 0 && Math.floor(t * 12) % 2)) g.drawImage(c.img, -c.img.width / 2 | 0, -c.img.height / 2 | 0);
+    g.restore();
     R.respingos.forEach(p => px(p.x, p.y - topo, 2, 2, '#e8f8ff'));
     K.desenharAves(g, W, t);
   }
@@ -682,10 +702,12 @@
     ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => { teclas[k] = false; }));
   });
   function atalhoTeste() { // só na prévia local: /jogo/?vila=0 abre o vilarejo do arranjo 0 com todas as áreas
-    const m = /[?&]vila=(\d)/.exec(location.search);
+    const m = /[?&](vila|rio)=(\d)/.exec(location.search); // ?rio=0 abre a subida do rio
     if (!m || location.hostname !== '127.0.0.1') return false;
-    const arr = ARRANJOS[+m[1]] || ARRANJOS[0];
+    const arr = ARRANJOS[+m[2]] || ARRANJOS[0];
     esc = { arr, areas: new Set(Object.keys(AREAS).slice(0, CAP_AREAS + 1)), publico: new Set(arr.publico.slice(0, 2)), municipios: new Set(arr.municipios.slice(0, 1)), equipe: new Set(EQUIPE.slice(0, 3)) };
+    window.__rio = () => rio;
+    if (m[1] === 'rio') { telaRio(); return true; }
     rio = { batidas: 0 }; telaVila();
     window.__tarefa = id => { const tf = vila.tarefas.find(x => x.id === id); vila.x = tf.x; vila.y = tf.y; acaoVila(); };
     return true;
