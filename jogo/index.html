@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rio dos Arranjos | minijogo da extensão rural</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<style>
+  :root { --verde: #1f6b3a; --verde-2: #2f8a4e; --fundo: #f5f6f3; --texto: #1d2420; --suave: #5d6a62; --borda: #d6ddd7; --branco: #fff; --ol: #1c1424; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--texto); background: var(--fundo); }
+  :focus-visible { outline: 2px solid var(--ol); outline-offset: 2px; box-shadow: 0 0 0 5px #ffc94a; }
+  header { background: var(--verde); color: #fff; padding: 10px 16px; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  header a { margin-left: auto; color: #fff; font-size: 13px; }
+  main { max-width: 1360px; margin: 0 auto; padding: 12px; }
+  .palco { position: relative; margin: 0 auto; border: 3px solid var(--ol); border-radius: 6px; background: #245a88; overflow: hidden; }
+  .palco canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+  .camada { position: absolute; inset: 0; }
+  .alvo { position: absolute; background: transparent; border: 0; padding: 0; border-radius: 4px; cursor: pointer; }
+  .alvo:hover, .alvo:focus-visible { outline: 2px dashed #ffe07a; outline-offset: 1px; }
+  .placa { position: absolute; left: 50%; bottom: 2px; transform: translateX(-50%); white-space: nowrap; pointer-events: none; font: 600 12px/1.2 system-ui, sans-serif; color: #fff; background: rgba(28,20,36,.85); padding: 1px 5px; border-radius: 3px; }
+  .bancada { display: grid; grid-template-columns: minmax(280px, 4fr) 7fr; gap: 12px; align-items: start; margin-top: 12px; }
+  @media (max-width: 800px) { .bancada { grid-template-columns: 1fr; } }
+  .cartao { background: var(--branco); border: 3px solid var(--ol); border-radius: 6px; padding: 12px 14px; }
+  .cartao h2 { font-size: 18px; margin: 0 0 6px; }
+  .cartao p { margin: 4px 0 8px; }
+  .fala { min-height: 22px; }
+  .fala b { color: var(--verde); }
+  button { font: inherit; cursor: pointer; border: 1px solid var(--borda); background: var(--branco); border-radius: 6px; padding: 6px 12px; color: var(--texto); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .lancar { background: #ffc94a; color: var(--ol); border: 2px solid var(--ol); border-radius: 4px; padding: 7px 14px; font-weight: 700; box-shadow: 0 3px 0 rgba(28,20,36,.4); }
+  .lancar:hover:not(:disabled) { background: #ffe07a; }
+  .falta { color: #b45309; font-weight: 600; }
+  .ok { color: var(--verde); font-weight: 600; }
+  .zonas { margin: 8px 0; padding: 0; list-style: none; }
+  .zonas li { display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px dashed var(--borda); }
+  .zonas li b { flex: none; width: 92px; color: var(--suave); font-weight: 600; }
+  aside { border: 3px solid var(--ol); border-radius: 6px; overflow: hidden; background: var(--branco); }
+  .abas { display: flex; gap: 4px; background: #2a1d14; padding: 6px 6px 0; flex-wrap: wrap; }
+  .abas button { color: #ffe9b8; background: transparent; border: 0; border-radius: 5px 5px 0 0; padding: 8px 10px; }
+  .abas button:hover { background: rgba(255,233,184,.14); }
+  .abas button.ativa { background: var(--branco); color: var(--ol); }
+  .paleta { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; align-content: flex-start; min-height: 120px; }
+  .paleta .dica { flex-basis: 100%; color: var(--suave); margin: 0 2px 4px; }
+  .peca { display: flex; align-items: center; gap: 8px; flex: 1 1 200px; max-width: 320px; text-align: left; border: 2px solid var(--borda); padding: 6px 10px; }
+  .peca:hover { filter: brightness(.96); }
+  .peca[aria-pressed="true"] { border-color: var(--ol); background: #fff3cf; box-shadow: inset 0 0 0 1px var(--ol); }
+  .peca canvas { width: 48px; height: 48px; image-rendering: pixelated; flex: none; }
+  .peca canvas.eq { width: 24px; height: 26px; }
+  .peca small { display: block; color: var(--suave); }
+  .peca .cor { width: 14px; height: 18px; flex: none; clip-path: polygon(0 0, 100% 0, 100% 60%, 50% 100%, 0 60%); }
+  .arranjos { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 10px; }
+  .arranjos .peca { max-width: none; padding: 10px 12px; }
+  .arranjos b { font-size: 15px; }
+  .progresso { height: 10px; border: 2px solid var(--ol); border-radius: 3px; background: #e5cf9e; overflow: hidden; margin: 6px 0; }
+  .progresso i { display: block; height: 100%; background: #3678bd; width: 0; }
+  ul.resumo { margin: 6px 0 10px; padding-left: 20px; }
+  #toque { display: none; gap: 8px; justify-content: center; margin-top: 10px; user-select: none; }
+  #toque button { min-width: 56px; min-height: 48px; font-size: 18px; touch-action: none; border: 2px solid var(--ol); }
+  @media (pointer: coarse) { #toque { display: flex; } }
+  .oculto { display: none !important; }
+  .aviso { padding: 30px; text-align: center; }
+</style>
+</head>
+<body>
+<header><h1>Rio dos Arranjos · ajude os extensionistas a promover o desenvolvimento rural</h1><a href="../">Tela de entrada</a></header>
+<main>
+  <div class="palco" id="palco"><canvas id="tela" aria-label="Cena do jogo"></canvas><div class="camada" id="camada"></div></div>
+  <div id="toque" aria-label="Controles de toque">
+    <button data-k="ArrowLeft" aria-label="Esquerda">◀</button><button data-k="ArrowUp" aria-label="Para cima">▲</button>
+    <button data-k="ArrowDown" aria-label="Para baixo">▼</button><button data-k="ArrowRight" aria-label="Direita">▶</button>
+    <button data-k=" " aria-label="Ação">Ação</button>
+  </div>
+  <div class="bancada" id="bancada">
+    <div class="cartao"><div id="cartao"></div><div class="fala" id="fala" aria-live="polite"></div></div>
+    <aside id="balcao"></aside>
+  </div>
+</main>
+<script>
+(function () {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const cv = $('tela'), g = cv.getContext('2d');
+  let K, W = 448, H = 216;
+
+  // A arte é a mesma do site: o bloco window.RIO é lido do index.html (produção: ../index.html; prévia local: ../apps-script/index.html).
+  async function carregarArte() {
+    for (const url of ['../index.html', '../apps-script/index.html']) {
+      try {
+        const r = await fetch(url); if (!r.ok) continue;
+        const html = await r.text(), i = html.indexOf('window.RIO = (function'), j = html.indexOf('\n})();', i);
+        if (i < 0 || j < 0) continue;
+        const s = document.createElement('script'); s.textContent = html.slice(i, j + 6); document.head.append(s);
+        if (window.RIO && RIO.kit) return RIO.kit;
+      } catch (e) { /* tenta o próximo endereço */ }
+    }
+    throw new Error('Não deu para carregar a arte do jogo.');
+  }
+
+  // ---------- conteúdo (códigos do catálogo real) ----------
+  const ARRANJOS = [
+    { nome: 'Mulheres do Café', regional: 'Norte Pioneiro', cadeia: '10200', nomeCadeia: 'Café', cultura: 'cafe', lavoura: 'cafezal',
+      produto: 'o café sai torrado, moído e embalado com a marca das produtoras',
+      publico: ['Mulheres agricultoras', 'Agricultura familiar', 'Jovens rurais'], municipios: ['Carlópolis', 'Pinhalão', 'Tomazina', 'Ibaiti', 'Japira'] },
+    { nome: 'Leite da Agricultura Familiar', regional: 'Sudoeste', cadeia: '10800', nomeCadeia: 'Pecuária de Leite', cultura: 'leite', lavoura: 'pasto',
+      produto: 'o leite vira queijo e iogurte na própria comunidade',
+      publico: ['Agricultura familiar', 'Jovens rurais', 'Mulheres agricultoras'], municipios: ['Francisco Beltrão', 'Marmeleiro', 'Renascença', 'Verê', 'Enéas Marques'] },
+    { nome: 'Juventude na Horta', regional: 'Curitiba', cadeia: '11000', nomeCadeia: 'Olericultura', cultura: 'horta', lavoura: 'horta',
+      produto: 'as hortaliças saem lavadas e embaladas direto para a merenda escolar',
+      publico: ['Jovens rurais', 'Agricultura familiar', 'Comunidades tradicionais'], municipios: ['Colombo', 'Mandirituba', 'São José dos Pinhais', 'Contenda', 'Tijucas do Sul'] }
+  ];
+  const AREAS = {
+    14710: { id: 'irrig', nome: 'Hidrologia e Irrigação', verbo: 'instalar a irrigação', x: 172, y: 146,
+      feito: 'Gotejamento instalado: o {lav} não depende mais só da chuva e atravessa a estiagem verde.' },
+    14700: { id: 'esgoto', nome: 'Recursos Naturais e Sustentabilidade', verbo: 'trocar o esgoto a céu aberto pela fossa', x: 114, y: 128,
+      feito: 'Fossa séptica biodigestora no lugar do esgoto a céu aberto. O córrego ficou limpo e o efluente tratado vira adubo.' },
+    15200: { id: 'solar', nome: 'Energias Renováveis', verbo: 'instalar os painéis solares', x: 58, y: 108,
+      feito: 'Painéis solares no telhado: a conta de luz caiu e sobra energia para os equipamentos da produção.' },
+    10010: { id: 'org', nome: 'Associativismo', verbo: 'reunir os produtores no galpão', x: 362, y: 108,
+      feito: 'Reunião no galpão: nasceu a associação de produtores. Juntos, compram insumos mais baratos e vendem melhor.' },
+    10000: { id: 'agro', nome: 'Agroindústria', verbo: 'montar a agroindústria', x: 404, y: 160,
+      feito: 'Pequena agroindústria funcionando: {prod}. Mais renda fica na propriedade.' }
+  };
+  const DRONE = { id: 'drone', verbo: 'sobrevoar o {lav} com o drone', x: 232, y: 146,
+    feito: 'O drone mapeou o {lav}: mostrou onde falta adubo e onde começou praga. O manejo ficou certeiro e a produção subiu.' };
+  const EQUIPE = ['Extensionista da cadeia', 'Extensionista social', 'Técnica de meio ambiente', 'Engenheiro agrícola', 'Especialista em agroindústria', 'Técnico em energia'];
+  const CAP_AREAS = 4, LEN = 2300;
+
+  // ---------- estado ----------
+  let fase = 'carregando', t = 0, esc = null, aba = 'transversal', margem, rio, vila, s = 2;
+  const teclas = {};
+
+  // ---------- utilidades de desenho ----------
+  const px = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(Math.round(x), Math.round(y), w, h); };
+  const hexRgb = h => [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16));
+  const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+  function telaTam(w, h) {
+    W = w; H = h; cv.width = w; cv.height = h;
+    const largura = Math.min(1340, $('palco').parentElement.clientWidth - 6);
+    s = Math.max(1, Math.min(Math.floor(largura / w), Math.floor(innerHeight * .6 / h * 2) / 2));
+    Object.assign($('palco').style, { width: w * s + 6 + 'px', height: h * s + 6 + 'px' });
+    g.imageSmoothingEnabled = false;
+  }
+  function spec() {
+    const zonas = [1, esc.areas.size, esc.publico.size, esc.municipios.size, esc.equipe.size].filter(Boolean).length;
+    return { stage: K.ESTAGIO[zonas], trans: [...esc.areas], carga: 1, equipe: esc.equipe.size,
+      cores: [...esc.publico].map(p => K.PUB_CORES[esc.arr.publico.indexOf(p) * 3 % K.PUB_CORES.length]), mapa: esc.municipios.size > 0 };
+  }
+  const lav = txt => txt.replace('{lav}', esc.arr.lavoura).replace('{prod}', esc.arr.produto);
+
+  // ---------- sprites próprios do jogo, no mesmo estilo (Spr, paleta e contorno do site) ----------
+  let SPR = {};
+  function criarSprites() {
+    const { Spr, T, OL, SKINS } = K;
+    function gente(skin, roupa, cabelo, q, chapeu, costas, saia) { // de pé, 12x18; q = passo
+      const p = new Spr(12, 18);
+      p.rect(3, 7, 6, 6, roupa[1]); p.rect(3, 7, 1, 6, roupa[2]); p.rect(8, 7, 1, 6, roupa[0]);
+      if (saia) { p.rect(2, 11, 8, 3, roupa[1]); p.rect(2, 13, 8, 1, roupa[0]); }
+      p.rect(2, 8, 1, 4, roupa[1]); p.rect(9, 8, 1, 4, roupa[0]); p.set(2, 12, skin[1]); p.set(9, 12, skin[1]);
+      const pe = q === 1 ? [4, 3] : q === 2 ? [3, 4] : [4, 4];
+      p.rect(3, 13 + (saia ? 1 : 0), 2, pe[0] - (saia ? 1 : 0), saia ? skin[1] : T.blu[0]); p.rect(7, 13 + (saia ? 1 : 0), 2, pe[1] - (saia ? 1 : 0), saia ? skin[1] : T.blu[0]);
+      p.rect(3, 12 + pe[0], 2, 1, T.brn[0]); p.rect(7, 12 + pe[1], 2, 1, T.brn[0]);
+      p.rect(4, 3, 4, 4, costas ? cabelo : skin[1]); p.rect(4, 3, 4, 1, cabelo);
+      if (!costas) { p.set(5, 5, OL); p.set(7, 5, OL); p.rect(5, 6, 2, 1, skin[0]); }
+      if (chapeu) { p.rect(1, 3, 10, 1, T.yel[1]); p.rect(2, 3, 4, 1, T.yel[2]); p.set(10, 3, T.yel[0]); p.rect(4, 0, 4, 3, T.yel[1]); p.rect(4, 0, 2, 2, T.yel[2]); p.rect(4, 2, 4, 1, T.red[1]); }
+      else { p.rect(3, 2, 6, 2, cabelo); if (saia) { p.rect(3, 4, 1, 4, cabelo); p.rect(8, 4, 1, 4, cabelo); } }
+      return p.outline().canvas();
+    }
+    SPR.ext = [0, 1, 2].map(q => gente(SKINS[1], T.dgrn, '#3a2418', q, true, false));
+    SPR.extCostas = [0, 1, 2].map(q => gente(SKINS[1], T.dgrn, '#3a2418', q, true, true));
+    SPR.colegas = [0, 1].map(i => gente(SKINS[i * 2], i ? T.grn : T.blu, '#2a1a14', 0, true, false));
+    const ROUPAS = [T.red, T.org, T.yel, T.ter];
+    SPR.prod = [0, 1, 2, 3].map(i => [0, 1, 2].map(q => gente(SKINS[(i + 2) % 4], ROUPAS[i], i % 2 ? '#1c1424' : '#5a3622', q, false, false, i % 2 === 0)));
+    SPR.vaca = (() => { const p = new Spr(24, 15); [4, 8, 15, 19].forEach(x => p.rect(x, 9, 2, 5, T.wht[0])); p.sEll(11, 7, 9, 4.5, T.wht); [[7, 5], [13, 8], [16, 5]].forEach(([x, y]) => p.ell(x, y, 2.2, 1.6, T.mus[0])); p.sEll(21, 5, 3, 3, T.wht); p.rect(22, 6, 2, 2, '#f2a0a0'); p.set(21, 4, OL); p.set(19, 2, T.crm[2]); p.line(2, 6, 1, 11, T.wht[0]); return p.outline().canvas(); })();
+    SPR.drone = (() => { const p = new Spr(20, 9); p.sEll(10, 5, 4, 2.4, T.mtl); p.rect(2, 2, 16, 1, T.mtl[0]); [[1, 1], [15, 1]].forEach(([x, y]) => p.rect(x, y, 4, 1, T.wht[2])); p.rect(3, 3, 1, 2, T.mtl[0]); p.rect(16, 3, 1, 2, T.mtl[0]); p.set(10, 5, T.red[2]); return p.outline().canvas(); })();
+    SPR.pedra = [0, 1].map(v => { const p = new Spr(22, 15); p.sEll(8, 8, 7, 5, T.gry); p.sEll(15, 9, 5.5, 4, T.gry); if (v) p.sEll(11, 5, 4, 3, T.gry); p.set(6, 6, '#e8eef4'); return p.outline().canvas(); });
+    SPR.tronco = (() => { const p = new Spr(38, 12), C = K.CASCA; p.cap(4, 6, 33, 5, 3.6, 3.2, C); p.ell(33, 5, 2.6, 3, T.crm[1]); p.ell(33, 5, 1, 1.2, T.crm[0]); p.line(12, 3, 18, 3, C[0]); p.line(22, 8, 28, 8, C[0]); p.line(16, 6, 13, 1, C[1]); p.ell(12, 1, 2, 1, T.grn[1]); return p.outline().canvas(); })();
+    SPR.aguape = (() => { const p = new Spr(16, 10); [[4, 5], [9, 4], [12, 6], [7, 7]].forEach(([x, y]) => { p.ell(x, y, 3, 2, '#3f8546'); p.set(x - 1, y - 1, '#8cc65e'); }); p.rect(8, 2, 2, 1, '#f2a0c0'); p.set(9, 1, '#d07aa8'); return p.outline().canvas(); })();
+    // galpão comunitário: tábuas na vertical, telhado de chapa e portão aberto
+    SPR.galpao = (() => { const p = new Spr(66, 48), TE = ['#5b6676', '#8793a3', '#b9c3cf'];
+      for (let y = 2; y < 16; y++) for (let x = 1; x < 65; x++) p.set(x, y, y === 2 ? TE[2] : y >= 14 ? TE[0] : x % 5 === 0 ? TE[0] : x % 5 === 1 ? TE[2] : TE[1]);
+      for (let x = 4; x < 62; x++) for (let y = 16; y < 44; y++) p.set(x, y, x % 4 === 0 ? T.wood[0] : x % 4 === 1 ? T.wood[2] : T.wood[1]);
+      p.rect(24, 24, 18, 20, T.brn[0]); p.rect(25, 25, 16, 19, '#3a2418'); p.rect(4, 42, 58, 2, T.brn[0]); p.rect(8, 22, 8, 6, T.blu[2]); p.rect(50, 22, 8, 6, T.blu[2]);
+      return p.outline().canvas(); })();
+    // agroindústria: alvenaria, telhado de telha, chaminé de inox e porta de carga
+    SPR.fabrica = (() => { const p = new Spr(72, 56), TL = ['#8e2f33', '#c2473d', '#e8805c'];
+      p.sRect(56, 0, 6, 16, T.mtl);
+      for (let y = 8; y < 22; y++) { const f = y - 8; for (let x = 1 + Math.max(0, 2 - f); x < 71 - Math.max(0, 2 - f); x++) p.set(x, y, f % 4 === 3 ? TL[0] : (x + (f >> 2) * 2) % 4 === 0 ? TL[0] : f % 4 === 0 ? TL[2] : TL[1]); }
+      p.rect(4, 22, 64, 30, T.wht[2]); p.rect(4, 22, 64, 2, T.wht[0]); p.rect(4, 48, 64, 4, T.gry[1]); p.rect(67, 22, 1, 30, T.wht[0]);
+      p.rect(40, 30, 20, 22, T.mtl[0]); for (let y = 31; y < 52; y += 2) p.rect(41, y, 18, 1, T.mtl[1]);
+      [8, 22].forEach(x => { p.rect(x, 30, 10, 8, T.wood[0]); p.rect(x + 1, 31, 8, 6, T.blu[2]); p.rect(x + 1, 33, 8, 1, T.wht[2]); p.set(x + 2, 32, '#ffffff'); });
+      p.sRect(8, 41, 26, 9, T.crm);
+      return p.outline().canvas(); })();
+    SPR.fossa = (() => { const p = new Spr(40, 16); [6, 19, 32].forEach(x => { p.sEll(x, 9, 5.5, 5, T.grn); p.sEll(x, 6, 4, 2, T.mtl); p.set(x - 1, 5, T.wht[2]); }); p.rect(11, 9, 3, 2, T.mtl[1]); p.rect(24, 9, 3, 2, T.mtl[1]); return p.outline().canvas(); })();
+    // plantas da lavoura em três estados: seca, cuidada e no ponto (com fruto)
+    const SECA = ['#5e5a2a', '#8a8240', '#b0a456'], VIVA = [T.dgrn[1], T.grn[1], T.grn[2]], FORTE = [T.dgrn[0], T.dgrn[1], T.grn[2]], CLARA = [T.grn[1], T.grn[2], '#c4e88a'];
+    SPR.planta = {
+      cafe: [SECA, VIVA, FORTE].map((cor, h) => { const p = new Spr(14, 13); p.rect(6, 9, 2, 3, K.CASCA[1]); K.tufo(p, 5, 6, 3.6 + h * .4, cor); K.tufo(p, 8.5, 5.5, 3.4 + h * .4, cor); if (h === 2) [[3, 6], [6, 8], [9, 4], [10, 7], [5, 3]].forEach(([x, y]) => { p.set(x, y, T.red[1]); p.set(x + 1, y, T.red[2]); }); return p.outline().canvas(); }),
+      horta: [SECA, CLARA, CLARA].map((cor, h) => { const p = new Spr(12, 9); K.tufo(p, 5.5, 4.5, 2.6 + h * .7, cor); if (h) { p.set(4, 3, cor[0]); p.set(7, 5, cor[0]); } if (h === 2) { p.rect(9, 3, 2, 3, T.org[1]); p.set(9, 2, T.grn[2]); } return p.outline().canvas(); }),
+      leite: [SECA, VIVA, FORTE].map((cor, h) => { const p = new Spr(10, 9); for (let i = 0; i < 4 + h * 2; i++) { const x = 1 + i * 1.3; p.line(5, 8, x, 7 - (2 + h * 1.5) * (1 - Math.abs(i - 2.5) / 5), cor[i % 3]); } return p.canvas(); })
+    };
+    SPR.placa = (() => { const p = new Spr(30, 20); p.rect(4, 12, 2, 8, T.wood[0]); p.rect(24, 12, 2, 8, T.wood[0]); p.sRect(1, 1, 28, 12, T.crm); p.rect(4, 5, 22, 1, T.brn[1]); p.rect(4, 8, 16, 1, T.brn[1]); return p.outline().canvas(); })();
+  }
+  // Canoa vista de cima (proa para cima), com a carga e a tripulação do arranjo; q = quadro da remada.
+  function canoaCima(sp, q) {
+    const { Spr, T } = K, n = Math.max(1, Math.min(3, sp.equipe)), L = 36 + n * 10 + Math.min(2, sp.trans.length) * 4, hw = 7, w = 34, cx = 16.5;
+    const p = new Spr(w, L + 8), TAB = ['#6e4a30', '#7c5638'], X = j => hw * Math.pow(Math.max(0, 1 - Math.pow(j / (L - 1) * 2 - 1, 2)), .55);
+    for (let j = 0; j < L; j++) {
+      const a = Math.round(cx - X(j)), b = Math.round(cx + X(j)), y = j + 4;
+      for (let x = a; x <= b; x++) p.set(x, y, x === a ? T.wood[2] : x === b ? T.wood[0] : x === a + 1 ? '#d49a62' : x === b - 1 ? T.wood[1] : (x - a) % 3 === 0 || (j + (x - a) * 5) % 17 === 0 ? T.brn[0] : TAB[((x - a) / 3 | 0) % 2]);
+    }
+    const banco = f => { const j = Math.round(L * f), a = Math.round(cx - X(j)) + 1, b = Math.round(cx + X(j)) - 1; p.rect(a, j + 4, b - a + 1, 2, T.wood[2]); p.rect(a, j + 6, b - a + 1, 1, T.wood[0]); };
+    const pos = [...Array(n)].map((_, i) => .26 + i * (.56 / Math.max(1, n - 1 || 1)) * (n > 1 ? 1 : 0) + (n === 1 ? .2 : 0));
+    pos.forEach(banco);
+    // carga entre os remadores: sacos de juta e caixotes; painel solar na popa se a área vier
+    const cargas = Math.min(4, sp.trans.length + 1);
+    for (let i = 0; i < cargas; i++) { const y = Math.round(4 + L * (.36 + i * .1)), x = cx - 3 + (i % 2) * 2; if (i % 2) K.box3(p, x - 1, y, 6, 2, 3, T.wood, T.wood); else p.sEll(x + 1, y + 2, 3, 2.4, T.jute); }
+    if (sp.trans.includes('15200')) K.painelSolar(p, Math.round(cx) - 5, L - 6, 11, 5);
+    if (sp.mapa) { p.sRect(Math.round(cx) - 2, L - 1, 5, 3, T.crm); p.set(Math.round(cx), L, T.red[1]); }
+    // bandeirolas do público na proa
+    if (sp.cores.length) { const y = 10; p.line(cx - 9, y, cx + 9, y, T.brn[0]); sp.cores.forEach((c, i) => { const x = Math.round(cx - 7 + i * (14 / Math.max(1, sp.cores.length - 1 || 1)) * (sp.cores.length > 1 ? 1 : .5)); p.rect(x, y + 1, 2, 2, c); p.set(x, y + 3, c); }); p.rect(Math.round(cx - 9), y - 1, 1, 3, T.wood[0]); p.rect(Math.round(cx + 9), y - 1, 1, 3, T.wood[0]); }
+    // tripulação de chapéu de palha, vista de cima, remando de um lado e do outro
+    pos.forEach((f, i) => {
+      const y = Math.round(4 + L * f) - 1, lado = (i + q) % 2 ? 1 : -1, shirt = i % 2 ? T.grn : T.dgrn;
+      p.sEll(cx, y + 3, 4, 2.4, shirt);
+      p.line(cx + lado * 3, y + 2, cx + lado * 11, y + (q ? 7 : -1), T.wood[1]); p.rEll(cx + lado * 12, y + (q ? 9 : -2), 1.6, 3, 0, T.wood);
+      p.sEll(cx, y, 3.3, 3.3, T.yel); p.set(cx - 1, y - 1, T.yel[2]); p.ell(cx, y, 1.4, 1.4, T.yel[0]); p.set(cx + 3, y + 1, T.red[1]); p.set(cx - 3, y + 1, T.red[1]);
+    });
+    return { img: p.outline().canvas(), L, hw };
+  }
+
+  // ---------- título ----------
+  const DEMO = [[4, ['15200', '10000', '14710'], 1, 3, 3], [3, ['10010'], 1, 2, 2], [2, ['14700'], 1, 2, 0]];
+  function desenhaTitulo() {
+    g.drawImage(K.fundo(W, false), 0, 0); K.desenharAgua(g, W, t); K.desenharVida(g, W, t);
+    DEMO.forEach(([st, trans, carga, equipe, np], i) => {
+      const b = K.barco({ stage: st, trans, carga, equipe, cores: K.PUB_CORES.slice(0, np), mapa: true }), ciclo = W + 180;
+      K.desenharBarco(g, b, Math.round(((i * ciclo / 3 + t * 9) % ciclo) - 140), i % 2 ? 128 : 100, t, true);
+    });
+    K.desenharAves(g, W, t);
+  }
+  function telaTitulo() {
+    fase = 'titulo'; esc = null; telaTam(448, K.H); $('camada').innerHTML = '';
+    $('cartao').innerHTML = '<h2>Ajude os extensionistas a promover o desenvolvimento rural</h2>' +
+      '<p>No IDR-Paraná, cada <b>arranjo regional</b> é uma canoa. Para ir ao rio, ela precisa levar a <b>cadeia produtiva</b>, as <b>áreas transversais</b>, o <b>público</b>, os <b>municípios</b> e a <b>equipe</b>. Rio abaixo, a equipe chega ao vilarejo dos produtores e põe o plano em prática.</p>' +
+      '<p>Teclado: setas e espaço. No celular, os botões embaixo da cena.</p>';
+    $('fala').textContent = '';
+    const bal = $('balcao'); bal.innerHTML = '<div class="abas"><button class="ativa">Escolha um arranjo</button></div><div class="paleta"><p class="dica">Arranjos de exemplo, com a cadeia já embarcada:</p><div class="arranjos" style="flex-basis:100%"></div></div>';
+    const lista = bal.querySelector('.arranjos');
+    ARRANJOS.forEach(a => {
+      const b = document.createElement('button'); b.className = 'peca';
+      b.append(copiaCanvas(K.icone({ tipo: 'cadeia', codigo: a.cadeia })));
+      const txt = document.createElement('span'); txt.innerHTML = '<b>' + a.nome + '</b><small>Regional ' + a.regional + ' · cadeia: ' + a.nomeCadeia + '</small>'; b.append(txt);
+      b.onclick = () => telaMargem(a); lista.append(b);
+    });
+  }
+  function copiaCanvas(src, cls) { const c = document.createElement('canvas'); c.width = src.width; c.height = src.height; c.getContext('2d').drawImage(src, 0, 0); if (cls) c.className = cls; return c; }
+
+  // ---------- margem: montar a canoa nas barracas ----------
+  const ROT_ABA = { cadeia: 'Cadeia', transversal: 'Áreas', publico: 'Público', municipio: 'Municípios', tecnico: 'Equipe' };
+  function faltas() {
+    const f = [];
+    if (!esc.areas.size) f.push('áreas transversais');
+    if (!esc.publico.size) f.push('público');
+    if (!esc.municipios.size) f.push('municípios');
+    if (esc.equipe.size < 2) f.push('equipe (pelo menos 2)');
+    return f;
+  }
+  function telaMargem(arr) {
+    esc = { arr, areas: new Set(), publico: new Set(), municipios: new Set(), equipe: new Set() };
+    margem = { p: 0 }; fase = 'margem'; aba = 'transversal'; telaTam(448, K.H);
+    const cam = $('camada'); cam.innerHTML = ''; cam.style.setProperty('--s', s);
+    K.ESTRUTURAS.forEach(e => {
+      if (!e.aba) return;
+      const b = document.createElement('button'); b.className = 'alvo'; b.title = e.dica; b.setAttribute('aria-label', e.rotulo + ': ' + e.dica);
+      Object.assign(b.style, { left: e.x * s + 'px', top: e.y * s + 'px', width: e.w * s + 'px', height: e.h * s + 'px' });
+      b.innerHTML = '<span class="placa">' + e.rotulo + '</span>';
+      b.onclick = () => { aba = e.aba; montaBalcao(); }; cam.append(b);
+    });
+    $('fala').innerHTML = 'Clique nas barracas da margem (ou nas abas do balcão) e escolha o que embarca. A canoa cresce a cada parte do arranjo.';
+    montaCartao(); montaBalcao();
+  }
+  function montaCartao() {
+    const f = faltas(), a = esc.arr, nomes = set => [...set].join(', ') || '<span class="falta">falta</span>';
+    $('cartao').innerHTML = '<h2>' + a.nome + '</h2><p>Regional ' + a.regional + '</p><ul class="zonas">' +
+      '<li><b>Cadeia</b><span>' + a.nomeCadeia + '</span></li>' +
+      '<li><b>Áreas</b><span>' + ([...esc.areas].map(c => AREAS[c].nome).join(', ') || '<span class="falta">falta</span>') + '</span></li>' +
+      '<li><b>Público</b><span>' + nomes(esc.publico) + '</span></li><li><b>Municípios</b><span>' + nomes(esc.municipios) + '</span></li>' +
+      '<li><b>Equipe</b><span>' + nomes(esc.equipe) + '</span></li></ul>' +
+      '<p class="' + (f.length ? 'falta' : 'ok') + '">' + (f.length ? 'Para ir ao rio, falta: ' + f.join(', ') + '.' : 'Canoa pronta para o rio!') + '</p>' +
+      '<button class="lancar" id="btnLancar"' + (f.length ? ' disabled' : '') + '>Empurrar a canoa para o rio</button> <button id="btnTrocar">Trocar de arranjo</button>';
+    $('btnLancar').onclick = lancar; $('btnTrocar').onclick = telaTitulo;
+  }
+  function montaBalcao() {
+    const bal = $('balcao'), abas = Object.keys(ROT_ABA);
+    bal.innerHTML = '<div class="abas">' + abas.map(k => '<button data-aba="' + k + '" class="' + (k === aba ? 'ativa' : '') + '">' + ROT_ABA[k] + '</button>').join('') + '</div><div class="paleta"></div>';
+    bal.querySelectorAll('[data-aba]').forEach(b => b.onclick = () => { aba = b.dataset.aba; montaBalcao(); });
+    const pal = bal.querySelector('.paleta'), a = esc.arr;
+    const peca = (rot, sub, icone, marcado, clique) => {
+      const b = document.createElement('button'); b.className = 'peca'; b.setAttribute('aria-pressed', marcado);
+      if (icone) b.append(icone);
+      const tx = document.createElement('span'); tx.innerHTML = rot + (sub ? '<small>' + sub + '</small>' : ''); b.append(tx);
+      b.onclick = clique; pal.append(b);
+    };
+    const dica = txt => { const p = document.createElement('p'); p.className = 'dica'; p.textContent = txt; pal.append(p); };
+    if (aba === 'cadeia') { dica('A cadeia produtiva deste arranjo já está na canoa.'); peca(a.nomeCadeia, 'cadeia produtiva', copiaCanvas(K.icone({ tipo: 'cadeia', codigo: a.cadeia })), true, () => {}); }
+    if (aba === 'transversal') { dica('Ferramentas que a equipe leva ao vilarejo. Cabem até ' + CAP_AREAS + '.'); Object.keys(AREAS).forEach(c => peca(AREAS[c].nome, AREAS[c].verbo.replace('{lav}', a.lavoura), copiaCanvas(K.icone({ tipo: 'transversal', codigo: c })), esc.areas.has(c), () => alterna('areas', c))); }
+    if (aba === 'publico') { dica('Cada público vira uma bandeirola na canoa.'); a.publico.forEach((p, i) => { const c = document.createElement('span'); c.className = 'cor'; c.style.background = K.PUB_CORES[i * 3 % K.PUB_CORES.length]; peca(p, '', c, esc.publico.has(p), () => alterna('publico', p)); }); }
+    if (aba === 'municipio') { dica('Os municípios atendidos pelo arranjo.'); a.municipios.forEach(m => peca(m, 'Regional ' + a.regional, null, esc.municipios.has(m), () => alterna('municipios', m))); }
+    if (aba === 'tecnico') { dica('De 2 a 3 extensionistas: são eles que remam.'); EQUIPE.forEach((e, i) => peca(e, 'Escritório do IDR-Paraná', copiaCanvas(K.CREW_C[i % K.CREW_C.length], 'eq'), esc.equipe.has(e), () => alterna('equipe', e))); }
+  }
+  function alterna(cat, v) {
+    const set = esc[cat];
+    if (set.has(v)) set.delete(v);
+    else if (cat === 'equipe' && set.size >= 3) { $('fala').textContent = 'A canoa só tem 3 remos. Tire alguém para trocar.'; return; }
+    else if (cat === 'areas' && set.size >= CAP_AREAS) { $('fala').textContent = 'A canoa já leva ' + CAP_AREAS + ' ferramentas. Tire uma para trocar: as outras podem ir em outro arranjo.'; return; }
+    else set.add(v);
+    $('fala').textContent = cat === 'areas' && set.has(v) ? AREAS[v].nome + ' embarcou: no vilarejo, a equipe vai ' + lav(AREAS[v].verbo) + '.' : '';
+    montaCartao(); montaBalcao();
+  }
+  function lancar() { if (faltas().length || margem.p) return; margem.p = .001; $('camada').innerHTML = ''; $('fala').textContent = 'Um, dois, três... para o rio!'; $('balcao').innerHTML = ''; }
+  function desenhaMargem(dt) {
+    g.drawImage(K.fundo(W, true), 0, 0); K.desenharAgua(g, W, t, true); K.desenharVida(g, W, t); K.desenharTrapiche(g);
+    const b = K.barco(spec()), x0 = 304, BEIRA = K.MARGEM - 14, suave = k => k * k * (3 - 2 * k);
+    let x = x0, cy = 166;
+    if (margem.p) {
+      margem.p = Math.min(1, margem.p + dt * .45); const p = margem.p, k1 = Math.min(1, p / .4), k2 = Math.max(0, (p - .4) / .6);
+      cy = Math.round(p <= .4 ? 166 + (BEIRA - 166) * suave(k1) : BEIRA + (112 - BEIRA) * suave(k2)); x = Math.round(x0 + (W + 20 - x0) * suave(k2));
+      K.desenharBarco(g, b, x, cy, t, cy < K.MARGEM + 4);
+      const meio = (p < .4 ? x : x0) + b.g.x0 + b.g.h.L / 2, fundoCasco = cy + b.g.h.hw + b.g.h.d - 2, naBeira = p >= .4, y = naBeira ? K.MARGEM + 2 : fundoCasco;
+      for (let i = 0; i < Math.min(3, esc.equipe.size); i++) { const pxx = Math.round(meio - 6 + (i - 1) * 16), q = naBeira ? 2 : (Math.floor(t * 6) + i) % 2; K.sombra(g, pxx + 6, y + 17, 5, 1.5, .3); g.drawImage(K.EMPURRA[q][i], pxx, y); }
+      if (p >= 1) telaRio();
+    } else {
+      K.desenharBarco(g, b, x, cy, t, false);
+      if (!faltas().length) { const ax = x + b.g.x0 + b.g.h.L / 2, ay = cy - 34 + Math.round(Math.sin(t * 4) * 2); px(ax - 4, ay - 1, 9, 2, K.OL); for (let i = 0; i < 4; i++) px(ax - 3 + i, ay + i, 7 - i * 2, 1, '#ffe07a'); }
+    }
+    K.desenharAves(g, W, t);
+  }
+
+  // ---------- rio visto de cima: a canoa sobe o rio desviando de pedras, troncos e redemoinhos ----------
+  const centro = y => 224 + 70 * Math.sin(y * .0031) + 26 * Math.sin(y * .011 + 1);
+  const meia = y => 60 + 12 * Math.sin(y * .007 + 2);
+  function montarCurso() {
+    const IH = LEN + H, c = document.createElement('canvas'); c.width = W; c.height = IH;
+    const b = c.getContext('2d'), img = b.createImageData(W, IH), d = img.data;
+    const AGc = [K.AG[4], K.AG[3], K.AG[2], K.AG[2], K.AG[1]].map(hexRgb), ARc = [K.AR[0], K.AR[1], K.AR[2], K.AR[3]].map(hexRgb), GRc = [K.GR[3], K.GR[2], K.GR[1], K.GR[2], K.GR[3]].map(hexRgb);
+    const tom = (cols, f, x, y) => { const v = Math.max(0, Math.min(.999, f)) * (cols.length - 1), i = Math.floor(v), n = ((x * 7919 + y * 104729) % 13) / 13 - .5; return (v - i + n * .6) * 16 > BAYER[(y & 3) * 4 + (x & 3)] ? cols[Math.min(cols.length - 1, i + 1)] : cols[i]; };
+    for (let y = 0; y < IH; y++) {
+      const cc = centro(y), m = meia(y);
+      for (let x = 0; x < W; x++) {
+        const dist = Math.abs(x - cc) - m, o = (y * W + x) * 4;
+        const cor = dist < 0 ? tom(AGc, -dist / m * 1.6, x, y) : dist < 9 ? tom(ARc, dist / 9, x, y) : tom(GRc, .5 + .14 * Math.sin(x * .05 + y * .023) + .12 * Math.sin(y * .041 - x * .029), x, y);
+        d[o] = cor[0]; d[o + 1] = cor[1]; d[o + 2] = cor[2]; d[o + 3] = 255;
+      }
+    }
+    b.putImageData(img, 0, 0);
+    const P = (x, y, w, h, cor) => { b.fillStyle = cor; b.fillRect(Math.round(x), Math.round(y), w, h); };
+    for (let y = 0; y < IH; y++) { // espuma na beira e areia molhada
+      const cc = centro(y), m = meia(y);
+      [cc - m, cc + m].forEach((bx, k) => { P(bx + (k ? -1 : 0), y, 1, 1, K.AR[0]); if (K.az(y, 40 + k) > .55) P(bx + (k ? -2 : 1), y, 1, 1, K.AG[5]); });
+    }
+    for (let i = 0; i < IH * 1.6; i++) { // capim, flores e seixos
+      const y = Math.floor(K.az(i, 41) * IH), x = Math.floor(K.az(i, 42) * W), dist = Math.abs(x - centro(y)) - meia(y), v = K.az(i, 43);
+      if (dist > 11) { if (v < .5) { P(x, y, 1, 2, K.GR[0]); P(x + 1, y + 1, 1, 1, K.GR[0]); } else if (v < .85) P(x, y, 1, 1, K.GR[4]); else P(x, y, 1, 1, ['#ffe07a', '#ffffff', '#f2a0c0'][i % 3]); }
+      else if (dist > 1 && v < .4) { P(x, y, 2, 1, '#b79a6a'); }
+    }
+    const coisas = []; // árvores, arbustos e bichos nas margens, de trás para a frente
+    for (let y = 30, k = 0; y < IH; y += 15 + Math.floor(K.az(k, 44) * 16), k++) {
+      [-1, 1].forEach(lado => {
+        const v = K.az(k, 45 + lado), dist = 14 + K.az(k, 47 + lado) * 70, x = centro(y) + lado * (meia(y) + dist);
+        let img = v < .55 ? K.ARVORES[Math.floor(K.az(k, 49 + lado) * K.ARVORES.length)] : v < .85 ? K.ARBUSTOS[k % 3] : null;
+        if (!img && dist < 30) img = v < .93 ? K.CAPIVARA : K.GARCA;
+        if (img && x > -20 && x < W + 20) coisas.push({ y, f: () => { K.sombra(b, x, y, img.width * .32, 3); b.drawImage(img, Math.round(x - img.width / 2), y - img.height); } });
+      });
+    }
+    // o vilarejo no fim do percurso: trapiche e casas nas duas margens
+    const cf = centro(40); coisas.push({ y: 46, f: () => { b.drawImage(K.CASA, Math.round(cf - meia(40) - 70), 4); b.drawImage(K.CASA, Math.round(cf + meia(40) + 14), 8); } });
+    coisas.sort((p, q) => p.y - q.y).forEach(o => o.f());
+    for (let y = 30; y < 66; y += 3) { P(cf - meia(y) - 2, y, 30, 3, (y / 3) % 2 ? '#a06a40' : '#8f5c36'); P(cf - meia(y) - 2, y + 2, 30, 1, '#5a3622'); }
+    return c;
+  }
+  function telaRio() {
+    fase = 'rio'; telaTam(448, K.H); $('camada').innerHTML = '';
+    const sp = spec();
+    rio = { d: 0, x: centro(LEN + H - 40), batidas: 0, inv: 0, giro: 0, obs: [], prox: LEN - 40, curso: montarCurso(), canoa: [0, 1].map(q => canoaCima(sp, q)), respingos: [] };
+    $('cartao').innerHTML = '<h2>Rio acima, até o vilarejo</h2><p>← → desviam a canoa. ↑ rema mais forte, ↓ segura. Cuidado com pedras, troncos e redemoinhos.</p><div class="progresso"><i id="barra"></i></div><p id="placar">Batidas: 0</p>';
+    $('fala').textContent = ''; $('balcao').innerHTML = '';
+  }
+  function atualizaRio(dt) {
+    const R = rio, vel = (teclas.ArrowUp ? 72 : teclas.ArrowDown ? 26 : 46) * (R.giro > 0 ? .35 : 1);
+    R.d = Math.min(LEN, R.d + vel * dt); R.inv = Math.max(0, R.inv - dt); R.giro = Math.max(0, R.giro - dt);
+    const topo = LEN - R.d, yC = topo + H - 44, cc = centro(yC), m = meia(yC), c0 = R.canoa[0];
+    R.x += ((teclas.ArrowRight ? 1 : 0) - (teclas.ArrowLeft ? 1 : 0)) * 80 * dt + (R.giro > 0 ? Math.sin(t * 10) * 50 * dt : 0);
+    if (Math.abs(R.x - cc) > m - c0.hw - 4) R.x = cc + Math.sign(R.x - cc) * (m - c0.hw - 4); // a margem segura a canoa
+    if (topo < R.prox && topo > 120) {
+      const oy = topo - 30, k = Math.random(), tipo = k < .42 ? 'pedra' : k < .74 ? 'tronco' : k < .88 ? 'redemoinho' : 'aguape';
+      R.obs.push({ y: oy, x: centro(oy) + (Math.random() * 2 - 1) * (meia(oy) - 16), tipo, v: Math.random() < .5 ? 0 : 1 });
+      R.prox = topo - (52 + Math.random() * 44 - Math.min(22, R.d / 110));
+    }
+    R.obs = R.obs.filter(o => o.y - topo < H + 30);
+    R.obs.forEach(o => {
+      if (o.tipo === 'tronco') o.y += 9 * dt; // o tronco desce com a correnteza
+      const dy = Math.abs(o.y - yC), dx = Math.abs(o.x - R.x), rx = o.tipo === 'tronco' ? 17 : o.tipo === 'pedra' ? 9 : 7, ry = o.tipo === 'tronco' ? 5 : 6;
+      if (o.tocou || o.tipo === 'aguape' || dx > rx + c0.hw || dy > ry + c0.L / 2) return;
+      o.tocou = true;
+      if (o.tipo === 'redemoinho') { R.giro = 1.3; $('fala').textContent = 'Redemoinho! A canoa gira e perde força.'; return; }
+      if (R.inv > 0) return;
+      R.batidas++; R.inv = 1.2; R.d = Math.max(0, R.d - 22);
+      for (let i = 0; i < 10; i++) R.respingos.push({ x: o.x, y: o.y, vx: (Math.random() - .5) * 60, vy: (Math.random() - .5) * 60, v: .6 });
+      $('fala').textContent = (o.tipo === 'pedra' ? 'Pedra!' : 'Tronco!') + ' A equipe se segura e segue remando.';
+    });
+    R.respingos.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.v -= dt; }); R.respingos = R.respingos.filter(p => p.v > 0);
+    $('barra').style.width = Math.round(R.d / LEN * 100) + '%'; $('placar').textContent = 'Batidas: ' + R.batidas;
+    if (R.d >= LEN) { R.fimT = (R.fimT || 0) + dt; if (R.fimT > 1.2) telaVila(); }
+  }
+  function desenhaRio() {
+    const R = rio, topo = Math.round(LEN - R.d);
+    g.drawImage(R.curso, 0, topo, W, H, 0, 0, W, H);
+    g.fillStyle = '#e8f8ff'; // veios da correnteza descendo
+    for (let k = 0; k < 46; k++) { const wy = ((k * 47 + t * (10 + k % 4 * 4)) % (H + 20)) - 10, y = wy + topo, f = K.az(k, 60) * 2 - 1; if (Math.sin(t * 1.3 + k) > 0) { g.globalAlpha = .55; g.fillRect(Math.round(centro(y) + f * (meia(y) - 8)), Math.round(wy), 1, 3 + k % 3 * 2); } }
+    g.globalAlpha = 1;
+    R.obs.forEach(o => {
+      const y = Math.round(o.y - topo);
+      if (o.tipo === 'pedra') { const im = SPR.pedra[o.v]; px(o.x - 10, y + 5, 3, 1, '#e8f8ff'); px(o.x + 6, y + 6 + (Math.sin(t * 3) > 0 ? 1 : 0), 4, 1, '#e8f8ff'); g.drawImage(im, Math.round(o.x - 11), y - 8); }
+      else if (o.tipo === 'tronco') { K.sombra(g, o.x, y + 5, 17, 2, .2); g.drawImage(SPR.tronco, Math.round(o.x - 19), y - 6); px(o.x - 20, y + 2 + (Math.sin(t * 4) > 0 ? 1 : 0), 2, 1, '#e8f8ff'); }
+      else if (o.tipo === 'aguape') g.drawImage(SPR.aguape, Math.round(o.x - 8), y - 5);
+      else for (let k = 0; k < 14; k++) { const a = t * 4 + k * .9, r = 1.5 + k * .55; px(o.x + Math.cos(a) * r, y + Math.sin(a) * r * .7, 2, 1, k % 2 ? '#e8f8ff' : K.AG[5]); }
+    });
+    // canoa: rastro, sombra e o quadro da remada
+    const c = R.canoa[Math.floor(t * 3) % 2], yC = H - 44, x = Math.round(R.x);
+    g.fillStyle = '#e8f8ff'; for (let k = 1; k < 8; k++) { g.globalAlpha = .55 - k * .06; g.fillRect(x - c.hw - 1 - k, yC + c.L / 2 + k * 3, 2, 1); g.fillRect(x + c.hw + k, yC + c.L / 2 + k * 3, 2, 1); } g.globalAlpha = 1;
+    K.sombra(g, x + 3, yC + 3, c.hw + 3, c.L / 2, .22);
+    if (!(R.inv > 0 && Math.floor(t * 12) % 2)) {
+      g.save(); g.translate(x, yC); if (R.giro > 0) g.rotate(Math.sin(t * 10) * .45);
+      g.drawImage(c.img, -c.img.width / 2 | 0, -c.img.height / 2 | 0); g.restore();
+    }
+    R.respingos.forEach(p => px(p.x, p.y - topo, 2, 2, '#e8f8ff'));
+    K.desenharAves(g, W, t);
+  }
+
+  // ---------- vilarejo dos produtores: o trabalho de extensão muda a cara do lugar ----------
+  const CHAO_FIM = 164;
+  function telaVila() {
+    fase = 'vila'; telaTam(448, K.H); $('camada').innerHTML = '';
+    const tarefas = [DRONE, ...[...esc.areas].map(c => AREAS[c])];
+    vila = { x: 52, y: 150, dir: 1, q: 0, passo: 0, feito: new Set(), acao: null, tarefas, fim: 0, fundoKey: null, part: [] };
+    $('cartao').innerHTML = '<h2>Vilarejo dos produtores</h2><p>Ande com as setas até as setas amarelas e aperte <b>espaço</b> para trabalhar.</p><p id="placar"></p>';
+    $('fala').innerHTML = 'A canoa chegou! A extensionista da cadeia desce com o drone e as ferramentas do arranjo.';
+    $('balcao').innerHTML = ''; placarVila();
+  }
+  const feito = id => vila.feito.has(id);
+  const DUR = 5; // segundos de cada atividade
+  const emAcao = id => vila.acao && vila.acao.tarefa.id === id ? vila.acao.t / DUR : 0;
+  const progresso = () => vila.feito.size / vila.tarefas.length;
+  function placarVila() { $('placar').textContent = 'Feito: ' + vila.feito.size + ' de ' + vila.tarefas.length; }
+  function perto() { return vila.tarefas.find(tf => !feito(tf.id) && Math.hypot(tf.x - vila.x, tf.y - vila.y) < 16); }
+  // partículas: poeira, gotas, brilhos e fumaça; g = gravidade
+  function solta(x, y, n, cor, vel, vida, grav) { for (let i = 0; i < n; i++) { const a = Math.random() * 6.28, v = vel * (.4 + Math.random() * .6); vila.part.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - vel * .3, v: vida * (.6 + Math.random() * .4), cor: Array.isArray(cor) ? cor[i % cor.length] : cor, g: grav || 0 }); } }
+  const BRILHO = ['#ffe07a', '#ffffff', '#ffb45c'];
+  const AREA_TAREFA = { drone: [224, 100], irrig: [224, 100], esgoto: [112, 112], solar: [58, 62], org: [362, 80], agro: [404, 132] };
+  function efeitos(dt) { // o que cada atividade solta enquanto acontece
+    const A = vila.acao; if (!A) return;
+    const k = A.t / DUR, id = A.tarefa.id, chance = p => Math.random() < p * dt * 60;
+    if (id === 'esgoto' && k < .4 && chance(.5)) solta(100 + Math.random() * 30, 116, 2, ['#9a6c48', '#6e4a30'], 30, .5, 120);
+    if (id === 'esgoto' && k > .75 && chance(.4)) solta(72 + (Math.random() - .5) * 20, 100 + Math.random() * 60, 1, BRILHO, 10, .6);
+    if (id === 'agro' && k > .2 && k < .7 && chance(.6)) solta(372 + Math.random() * 64, 158, 2, ['#c8b898', '#e5cf9e'], 22, .7, -10);
+    if (id === 'irrig' && k > .6 && chance(.8)) { const r = Math.floor(Math.random() * 6); solta(160 + Math.random() * 130, 72 + r * 12, 2, [K.T.blu[2], '#e8f8ff'], 18, .45, 80); }
+    if (id === 'drone' && k > .15 && k < .9 && chance(.3)) { const d = posDrone(k); solta(d.x, d.chao, 1, '#c4e88a', 8, .5); }
+  }
+  function atualizaVila(dt) {
+    const V = vila;
+    V.part.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.g * dt; p.v -= dt; }); V.part = V.part.filter(p => p.v > 0);
+    if (V.acao) {
+      V.acao.t += dt; efeitos(dt);
+      if (V.acao.t >= DUR) {
+        const id = V.acao.tarefa.id, [bx, by] = AREA_TAREFA[id];
+        V.feito.add(id); solta(bx, by, 26, BRILHO, 55, 1.1, 20); if (id === 'esgoto') for (let y = 96; y < CHAO_FIM; y += 6) solta(72 + Math.round(Math.sin(y * .08) * 6 + (y - 92) * .25), y, 1, BRILHO, 12, 1);
+        $('fala').textContent = lav(V.acao.tarefa.feito); V.acao = null; placarVila(); if (V.feito.size === V.tarefas.length) V.fim = .001;
+      }
+      return;
+    }
+    if (V.fim) { V.fim += dt; if (Math.random() < .2) solta(Math.random() * W, 40 + Math.random() * 100, 6, K.PUB_CORES, 40, 1, 30); if (V.fim > 4 && fase === 'vila') telaFim(); return; }
+    const mx = (teclas.ArrowRight ? 1 : 0) - (teclas.ArrowLeft ? 1 : 0), my = (teclas.ArrowDown ? 1 : 0) - (teclas.ArrowUp ? 1 : 0);
+    if (mx || my) { const k = mx && my ? .7 : 1; V.x = Math.max(8, Math.min(W - 8, V.x + mx * 60 * dt * k)); V.y = Math.max(96, Math.min(160, V.y + my * 50 * dt * k)); V.passo += dt; V.costas = my < 0; }
+    else V.passo = 0;
+    const tf = perto(); if (tf && !V.avisou) { $('fala').innerHTML = 'Aperte <b>espaço</b> para ' + lav(tf.verbo) + '.'; V.avisou = tf.id; } if (!tf) V.avisou = null;
+  }
+  function acaoVila() { const tf = perto(); if (tf && !vila.acao) { vila.acao = { tarefa: tf, t: 0, ox: vila.x, oy: vila.y }; $('fala').textContent = 'Mãos à obra: ' + lav(tf.verbo) + '...'; } }
+  function mix(a, b, k) { const p = hexRgb(a), q = hexRgb(b); return '#' + p.map((v, i) => Math.round(v + (q[i] - v) * k).toString(16).padStart(2, '0')).join(''); }
+  function fundoVila() {
+    const p = progresso(), key = [...vila.feito].join() + (vila.acao && vila.acao.tarefa.id === 'esgoto' ? 'x' : '');
+    if (vila.fundoKey === key) return vila.fundoC;
+    const c = document.createElement('canvas'); c.width = W; c.height = H; const b = c.getContext('2d');
+    const P = (x, y, w, h, cor) => { b.fillStyle = cor; b.fillRect(Math.round(x), Math.round(y), w, h); };
+    const SECO = ['#7c7a3c', '#9a9246', '#b3a656', '#c8b868'], gr = [K.GR[2], K.GR[1], K.GR[2], K.GR[3]].map((v, i) => mix(SECO[i], v, Math.min(1, .25 + p)));
+    K.dither(b, 0, 0, W, CHAO_FIM, gr);
+    for (let i = 0; i < W * (.6 + p); i++) { const x = Math.floor(K.az(i, 70) * W), y = Math.floor(K.az(i, 71) * (CHAO_FIM - 4)), v = K.az(i, 72); if (v < .5) P(x, y, 1, 2, mix('#6a6030', K.GR[0], p)); else if (v < .88) P(x, y, 1, 1, mix('#d6c27a', K.GR[4], p)); else if (p > .3) P(x, y, 1, 1, ['#ffe07a', '#ffffff', '#f2a0c0'][i % 3]); }
+    for (let x = 0; x < W; x++) { const y = 38 + Math.round(Math.sin(x * .025) * 2); P(x, y, 1, 1, '#a8824e'); P(x, y + 1, 1, 4, '#d6b47e'); P(x, y + 5, 1, 1, '#a8824e'); if (x % 5 < 3) P(x, y + 3, 1, 1, '#c8a36a'); }
+    // esgoto a céu aberto da casa até o rio (some com a fossa)
+    if (!feito('esgoto')) for (let y = 92; y < CHAO_FIM; y++) { const x = 72 + Math.round(Math.sin(y * .08) * 6 + (y - 92) * .25); P(x - 1, y, 4, 1, '#5e4a2a'); P(x, y, 2, 1, y % 5 ? '#7a6a3a' : '#6d8a3a'); }
+    // barranco e rio, com o trapiche
+    for (let x = 0; x < W; x++) { P(x, CHAO_FIM, 1, 4, '#7a5434'); P(x, CHAO_FIM, 1, 1, '#96694a'); P(x, CHAO_FIM - 1, 1, 1 + (K.az(x, 73) > .5 ? 1 : 0), gr[1]); }
+    K.dither(b, 0, CHAO_FIM + 4, W, H - CHAO_FIM - 4, feito('esgoto') || vila.tarefas.every(tf => tf.id !== 'esgoto') ? [K.AG[1], K.AG[2], K.AG[3], K.AG[3]] : ['#3a5a4a', '#4a6a52', K.AG[2], K.AG[3]]);
+    const coisas = [];
+    for (let x = 4, k = 0; x < W; x += 24 + Math.floor(K.az(k, 74) * 26), k++) { if (x > 300 && x < 400) continue; const img = K.ARVORES[2 + Math.floor(K.az(k, 75) * 4)], base = 34 + Math.floor(K.az(k, 76) * 4), xx = x; coisas.push({ y: base, f: () => { K.sombra(b, xx + img.width / 2 + 3, base, img.width * .34, 3); b.drawImage(img, xx, base - img.height); } }); }
+    coisas.push({ y: 92, f: () => { K.sombra(b, 58, 92, 30, 5); b.drawImage(K.CASA, 30, 50); } });
+    coisas.push({ y: 94, f: () => { K.sombra(b, 362, 94, 32, 4); b.drawImage(SPR.galpao, 330, 48); } });
+    if (p > .3) [[18, 104], [130, 96], [300, 150], [420, 120]].forEach(([x, y], i) => coisas.push({ y, f: () => b.drawImage(K.ARBUSTOS[i % 3], x, y - 10) }));
+    coisas.sort((a, c2) => a.y - c2.y).forEach(o => o.f());
+    vila.fundoKey = key; vila.fundoC = c; return c;
+  }
+  const PC = { set: (x, y, c) => px(x, y, 1, 1, c), rect: (x, y, w, h, c) => px(x, y, w, h, c) }; // desenha direto na tela com as funções de sprite
+  const limita = v => Math.max(0, Math.min(1, v)), suave = k => k * k * (3 - 2 * k);
+  const ROW0 = 70, FX0 = 152, FX1 = 294;
+  // Drone: decola da mão da extensionista, varre a lavoura fileira por fileira e volta.
+  function posDrone(k) {
+    const A = vila.acao, ox = A ? A.ox : 232, oy = A ? A.oy - 6 : 140;
+    if (k < .15) { const f = suave(k / .15); return { x: ox + (FX0 - ox) * f, chao: oy + (ROW0 + 2 - oy) * f, alt: 4 + 20 * f }; }
+    if (k < .9) { const i = Math.min(5, Math.floor((k - .15) / .125)), f = ((k - .15) / .125) - i, x = i % 2 ? FX1 - f * (FX1 - FX0) : FX0 + f * (FX1 - FX0); return { x, chao: ROW0 + 2 + i * 12, alt: 24 }; }
+    const f = suave((k - .9) / .1); return { x: FX0 + (ox - FX0) * f, chao: ROW0 + 62 + (oy - ROW0 - 62) * f, alt: 24 - 20 * f };
+  }
+  function nivelLinha(r) { // cada fileira melhora quando a água chega ou quando o drone passa por ela
+    let n = (feito('irrig') ? 1 : 0) + (feito('drone') ? 1 : 0);
+    const ki = emAcao('irrig'), kd = emAcao('drone');
+    if (ki && ki > .6 + r * .06) n++;
+    if (kd && kd > .15 + (r + 1) * .125) n++;
+    return Math.min(2, n);
+  }
+  function desenhaLavoura() {
+    const cult = esc.arr.cultura, T = K.T, ki = feito('irrig') ? 1 : emAcao('irrig');
+    if (ki) { px(149, 75, 2, 64, '#2e3550'); px(149, 75, 1, 64, T.mtl[1]); px(146, 136, 8, 6, T.blu[1]); px(146, 136, 8, 1, T.blu[2]); } // cano mestre e caixa d'água
+    for (let r = 0; r < 6; r++) {
+      const y = ROW0 + r * 12, spr = SPR.planta[cult][nivelLinha(r)];
+      if (cult !== 'leite') { px(FX0, y + 2, 142, 3, '#6e4a30'); px(FX0, y + 2, 142, 1, '#8a6040'); }
+      for (let k = 0; k < 11; k++) { const x = 156 + k * 12 + (r % 2) * 4; g.drawImage(spr, x - (spr.width >> 1), y + 4 - spr.height); }
+      if (ki) { // mangueira estendida fileira a fileira; depois a água chega e os aspersores giram
+        const len = Math.max(0, Math.min(142, Math.min(1, ki / .6) * 6 * 142 - r * 142));
+        if (len) { px(FX0, y + 5, len, 2, '#2e3550'); px(FX0, y + 5, len, 1, T.mtl[1]); if (len < 142) px(FX0 + len - 2, y + 3, 4, 4, T.yel[0]); }
+        if (feito('irrig') || ki > .6 + r * .06) for (let k = 0; k < 5; k++) { // aspersor: haste e leque de gotas em arco
+          const x = 160 + k * 28 + r * 3; px(x, y - 1, 1, 6, T.mtl[0]); px(x - 1, y - 2, 3, 1, T.mtl[2]);
+          for (let j = 0; j < 6; j++) { const f = (t * 1.8 + j / 6 + k * .13) % 1, dx = 2 + f * 9, dy = -3 - f * 6 + f * f * 9; g.globalAlpha = 1 - f * .7; px(x - dx, y + dy, 1, 1, j % 2 ? T.blu[2] : '#e8f8ff'); px(x + dx, y + dy, 1, 1, j % 2 ? '#e8f8ff' : T.blu[2]); }
+          g.globalAlpha = 1; }
+      }
+    }
+    if (cult === 'leite') [[176, 74], [236, 98], [286, 70]].forEach(([x, y], i) => { K.sombra(g, x + 12, y + 14, 10, 2); g.drawImage(SPR.vaca, x + Math.round(Math.sin(t * .5 + i) * 2), y); });
+  }
+  function balao(x, y) { px(x - 6, y - 8, 13, 7, K.OL); px(x - 5, y - 7, 11, 5, '#ffffff'); px(x - 1, y - 1, 3, 1, K.OL); px(x, y, 1, 1, K.OL); for (let i = 0; i < 3; i++) if (Math.floor(t * 4) % 4 > i) px(x - 3 + i * 3, y - 5, 1, 1, K.OL); }
+  function desenhaVila(dt) {
+    g.drawImage(fundoVila(), 0, 0);
+    const T = K.T, V = vila;
+    // água viva e a canoa no trapiche
+    g.fillStyle = '#e8f8ff'; for (let k = 0; k < 20; k++) if (Math.sin(t * 1.3 + k) > 0) { g.globalAlpha = .5; g.fillRect(Math.round((k * 61 + t * 7) % (W + 10)) - 5, CHAO_FIM + 8 + (k * 13) % 40, 3 + k % 3 * 2, 1); } g.globalAlpha = 1;
+    for (let y = CHAO_FIM - 8, k = 0; y < H - 6; y += 3, k++) { px(40, y, 22, 3, k % 2 ? '#a06a40' : '#8f5c36'); px(40, y + 2, 22, 1, '#5a3622'); }
+    K.desenharBarco(g, K.barco(Object.assign(spec(), { equipe: 0 })), 62, 196, t, true); // a equipe já desembarcou
+
+    // ESGOTO: escavação com montes de terra, as três caixas descem quicando, as moscas vão embora
+    const ke = feito('esgoto') ? 1 : emAcao('esgoto');
+    if (!feito('esgoto')) { const foge = Math.max(0, ke - .75) * 500; for (let i = 0; i < 5; i++) px(76 + Math.sin(t * 7 + i * 2) * 5 + foge * .3 * (i - 2), 108 + i * 11 + Math.cos(t * 9 + i) * 3 - foge, 1, 1, K.OL); }
+    if (ke && ke < 1) {
+      const monte = Math.min(1, ke / .4) * (ke > .8 ? 1 - (ke - .8) * 5 : 1);
+      [[94, 118], [132, 119]].forEach(([x, y]) => { const h = Math.round(1 + monte * 5); for (let j = 0; j < h; j++) px(x - (h - j), y - j, (h - j) * 2, 1, j % 2 ? '#9a6c48' : '#7a5434'); });
+      if (ke > .08) [98, 111, 124].forEach(x => { px(x - 4, 111, 9, 4, '#3a2418'); px(x - 3, 110, 7, 1, '#5a3622'); });
+      for (let i = 0; i < 3; i++) {
+        const kt = limita((ke - .4 - i * .1) / .14); if (!kt) continue;
+        const yoff = kt < .7 ? -34 * Math.pow(1 - kt / .7, 2) : -4 * Math.sin((kt - .7) / .3 * Math.PI);
+        if (kt < .7) K.sombra(g, 98 + i * 13, 113, 5 * (1 - (1 - kt / .7) * .5), 1.5, .3);
+        g.drawImage(SPR.fossa, i * 13, 0, i === 2 ? 14 : 13, 16, 92 + i * 13, Math.round(104 + yoff), i === 2 ? 14 : 13, 16);
+        if (kt > .69 && kt < .76) solta(98 + i * 13, 114, 6, ['#9a6c48', '#c8b898'], 25, .4, 60);
+      }
+    } else if (feito('esgoto')) g.drawImage(SPR.fossa, 92, 104);
+
+    // ENERGIA: os painéis descem um a um com um clarão; raios de sol; as janelas acendem
+    const ks = feito('solar') ? 1 : emAcao('solar');
+    for (let i = 0; i < 4; i++) {
+      const kp = limita((ks - .08 - i * .17) / .12); if (!kp) continue;
+      const y = 57 + (i % 2) - Math.round((1 - suave(kp)) * 16);
+      K.painelSolar(PC, 36 + i * 11, y, 10, 7);
+      if (kp >= 1 && ks < .08 + i * .17 + .2 && ks < 1) { g.globalAlpha = .7; px(36 + i * 11, y, 10, 7, '#ffffff'); g.globalAlpha = 1; }
+    }
+    if (ks > .72 && ks < 1) { g.globalAlpha = .45; g.fillStyle = '#ffe07a'; for (let i = 0; i < 4; i++) if (Math.sin(t * 10 + i * 1.7) > 0) for (let j = 0; j < 16; j++) g.fillRect(14 + i * 11 + j * 1.6, 24 + i * 2 + j * 2, 1, 1); g.globalAlpha = 1; }
+    if (ks > .85) { const brilho = feito('solar') ? .35 + .1 * Math.sin(t * 2) : (ks - .85) / .15 * .7; g.globalAlpha = brilho; px(39, 76, 7, 5, '#ffe07a'); px(68, 76, 7, 5, '#ffe07a'); g.globalAlpha = 1; }
+
+    desenhaLavoura();
+
+    // DRONE: sombra no chão que encolhe com a altura e faixa de leitura sobre as plantas
+    const kd = emAcao('drone');
+    if (kd) {
+      const d = posDrone(kd), y = d.chao - d.alt + Math.sin(t * 9);
+      if (kd > .15 && kd < .9) { g.globalAlpha = .22; g.fillStyle = '#c4e88a'; g.beginPath(); g.moveTo(d.x - 2, y + 5); g.lineTo(d.x + 2, y + 5); g.lineTo(d.x + 9, d.chao + 3); g.lineTo(d.x - 9, d.chao + 3); g.fill(); g.globalAlpha = .6; px(d.x - 9, d.chao + 2 + (Math.floor(t * 12) % 2), 18, 1, '#e8ffd0'); g.globalAlpha = 1; }
+      K.sombra(g, d.x, d.chao + 4, 7 - d.alt * .12, 1.5, .3);
+      g.drawImage(SPR.drone, Math.round(d.x - 10), Math.round(y - 4));
+      if (Math.floor(t * 20) % 2) { px(d.x - 9, y - 3, 4, 1, '#ffffff'); px(d.x + 5, y - 3, 4, 1, '#ffffff'); } // hélices girando
+    }
+
+    // AGROINDÚSTRIA: andaime, paredes subindo com poeira, chaminé e caixas do produto empilhadas
+    const ka = feito('agro') ? 1 : emAcao('agro'), pessoas = [], baloes = [];
+    if (ka) pessoas.push({ y: 160, f: () => {
+      const kb = suave(limita((ka - .18) / .5)), h = Math.round(SPR.fabrica.height * kb);
+      K.sombra(g, 404, 160, 36 * Math.max(.3, kb), 4);
+      if (h) g.drawImage(SPR.fabrica, 0, SPR.fabrica.height - h, 72, h, 368, 160 - h, 72, h);
+      if (ka < .8) { const ha = Math.round(Math.min(1, ka / .18) * 52), sai = ka > .7 ? (ka - .7) * 10 : 0; g.globalAlpha = 1 - sai; for (let x = 366; x <= 442; x += 12) px(x, 160 - ha, 2, ha, T.wood[1]); for (let y = 160 - 12; y > 160 - ha; y -= 12) px(366, y, 78, 1, T.wood[0]); g.globalAlpha = 1; }
+      if (ka > .7) { const ic = K.icone({ tipo: 'cadeia', codigo: esc.arr.cadeia }); g.drawImage(ic, 376, 144, 24, 24); for (let i = 0; i < 5; i++) { const k = (t * .35 + i / 5) % 1; g.globalAlpha = .7 * (1 - k); px(427 + Math.sin(k * 5 + i) * 3 + k * 6, 102 - k * 20, k > .5 ? 4 : 3, 3, '#f4f4f0'); } g.globalAlpha = 1; }
+      const nCx = feito('agro') ? 5 : Math.floor(limita((ka - .8) / .2) * 5.99);
+      [[346, 154], [355, 154], [350, 148], [346, 160], [355, 160]].slice(0, nCx).forEach(([x, y]) => K.box3(PC, x, y - 6, 8, 3, 4, T.wood, T.wood));
+    } });
+    else for (let i = 0; i < 6; i++) px(372 + i * 12, 152, 2, 8, T.wood[0]);
+
+    // ASSOCIATIVISMO: os produtores vão ao galpão, conversam, as bandeirolas sobem, votam de mão erguida e a placa sobe
+    const ko = feito('org') ? 1 : emAcao('org'), reu = feito('org') ? 1 : suave(limita(ko / .4));
+    const nBand = feito('org') ? 8 : Math.floor(limita((ko - .4) / .45) * 8.99);
+    if (nBand) { for (let x = 332; x < 394; x++) px(x, 60 + Math.round(Math.sin((x - 332) / 62 * Math.PI) * 4), 1, 1, T.brn[0]); for (let i = 0; i < nBand; i++) { const x = 335 + i * 7; px(x, 62 + Math.round(Math.sin((x - 332) / 62 * Math.PI) * 4), 3, 3, K.PUB_CORES[i % K.PUB_CORES.length]); } }
+    const kpl = feito('org') ? 1 : limita((ko - .85) / .15);
+    if (kpl) { const h = Math.round(SPR.placa.height * suave(kpl)); g.drawImage(SPR.placa, 0, 0, 30, h, 298, 98 - h, 30, h); }
+    const votando = ko > .78 && ko < 1;
+    [[6, 106], [16, 112], [118, 142], [130, 136]].forEach(([hx, hy], i) => {
+      const tx = 326 + i * 11, ty = 94 + (i % 2) * 4, x = hx + (tx - hx) * reu, y = hy + (ty - hy) * reu;
+      const q = reu > 0 && reu < 1 ? (Math.floor(t * 6) + i) % 2 + 1 : 0;
+      pessoas.push({ y: y + 18, f: () => { K.sombra(g, x + 6, y + 18, 5, 1.5); g.drawImage(SPR.prod[i][q], Math.round(x), Math.round(y)); if (votando) { px(x + 1, y + 2, 1, 6, K.OL); px(x + 1, y + 1, 1, 1, '#e0a070'); px(x + 2, y + 3, 1, 5, '#e0a070'); } } });
+      const fala = (ko > .4 && ko < .78 && Math.floor(t * 1.6) % 4 === i) || (feito('org') && Math.floor(t * .5) % 8 === i * 2 && Math.sin(t * 3) > -.5);
+      if (fala) baloes.push([x + 6, y - 2]);
+    });
+
+    // colegas no trapiche e a extensionista que o jogador guia (trabalhando, com barra de progresso)
+    [...esc.equipe].slice(1).forEach((_, i) => pessoas.push({ y: 168, f: () => g.drawImage(SPR.colegas[i % 2], 44 + i * 9, 150) }));
+    const trabalhando = !!V.acao, q = trabalhando ? (Math.floor(t * 6) % 2) + 1 : V.passo ? (Math.floor(V.passo * 8) % 2) + 1 : 0;
+    pessoas.push({ y: V.y, f: () => {
+      K.sombra(g, V.x, V.y, 5, 1.5); g.drawImage((V.costas && !trabalhando ? SPR.extCostas : SPR.ext)[q], Math.round(V.x - 6), Math.round(V.y - 18 - (trabalhando && q === 2 ? 1 : 0)));
+      if (trabalhando) {
+        if (V.acao.tarefa.id !== 'drone') { const a = Math.sin(t * 14) * 1.2; px(V.x + 5 + Math.cos(a) * 3, V.y - 10 + Math.sin(a) * 3, 2, 2, T.mtl[1]); px(V.x + 5, V.y - 10, 1, 1, T.wood[1]); }
+        const k = V.acao.t / DUR; px(V.x - 9, V.y - 27, 18, 4, K.OL); px(V.x - 8, V.y - 26, Math.round(16 * k), 2, '#ffe07a'); px(V.x - 8, V.y - 26, Math.round(16 * k), 1, '#ffffff');
+      }
+    } });
+    pessoas.sort((a, b) => a.y - b.y).forEach(o => o.f());
+    baloes.forEach(([x, y]) => balao(x, y));
+    // setas amarelas nos pontos de trabalho (o mesmo marcador da canoa ativa no site)
+    V.tarefas.forEach(tf => { if (feito(tf.id) || (V.acao && V.acao.tarefa === tf)) return; const ax = tf.x, ay = tf.y - 34 + Math.round(Math.sin(t * 4) * 2); px(ax - 4, ay - 1, 9, 2, K.OL); for (let i = 0; i < 4; i++) px(ax - 3 + i, ay + i, 7 - i * 2, 1, '#ffe07a'); });
+    V.part.forEach(p => { g.globalAlpha = Math.min(1, p.v * 2); px(p.x, p.y, p.cor === '#ffffff' || p.cor === '#ffe07a' ? 1 : 2, p.cor === '#ffe07a' ? 2 : 1, p.cor); if (p.cor === '#ffe07a') px(p.x - 1, p.y + 1, 3, 1, p.cor); }); g.globalAlpha = 1;
+    K.desenharAves(g, W, t);
+    void dt;
+  }
+
+  // ---------- fim ----------
+  function telaFim() {
+    fase = 'fim';
+    const fora = Object.keys(AREAS).filter(c => !esc.areas.has(c)).map(c => AREAS[c].nome), b = rio.batidas;
+    const nota = b === 0 ? 'travessia perfeita, sem nenhuma batida' : b <= 3 ? b + ' batida' + (b > 1 ? 's' : '') + ', nada que a equipe não resolvesse' : b + ' batidas: deu trabalho, mas a canoa chegou';
+    $('cartao').innerHTML = '<h2>Arranjo ' + esc.arr.nome + ' entregue!</h2><p>Rio acima: ' + nota + '.</p><ul class="resumo">' +
+      '<li><b>Cadeia produtiva:</b> ' + esc.arr.nomeCadeia + '</li><li><b>Áreas transversais:</b> ' + [...esc.areas].map(c => AREAS[c].nome).join(', ') + '</li>' +
+      '<li><b>Público:</b> ' + [...esc.publico].join(', ') + '</li><li><b>Municípios:</b> ' + [...esc.municipios].join(', ') + '</li><li><b>Equipe:</b> ' + [...esc.equipe].join(', ') + '</li></ul>' +
+      '<button class="lancar" id="btnDeNovo">Jogar com outro arranjo</button>';
+    $('fala').textContent = 'O vilarejo mudou de cara com o trabalho de extensão!';
+    $('balcao').innerHTML = '<div class="abas"><button class="ativa">É assim no sistema de verdade</button></div><div class="paleta"><p>Cada regional do IDR-Paraná monta os seus arranjos regionais do mesmo jeito: escolhe a cadeia produtiva ou a área, o público, os municípios e a equipe. Com tudo isso, a canoa ganha o rio e o plano de trabalho chega às famílias produtoras.</p>' +
+      (fora.length ? '<p class="dica">Ficaram na margem: ' + fora.join(', ') + '. Elas podem embarcar em outro arranjo.</p>' : '') + '</div>';
+    $('btnDeNovo').onclick = telaTitulo;
+  }
+
+  // ---------- laço e controles ----------
+  let ultimo = performance.now();
+  function quadro(agora) {
+    const dt = Math.min(.05, (agora - ultimo) / 1000); ultimo = agora; t += dt;
+    if (fase === 'titulo') desenhaTitulo();
+    else if (fase === 'margem') desenhaMargem(dt);
+    else if (fase === 'rio') { atualizaRio(dt); if (fase === 'rio') desenhaRio(); }
+    if (fase === 'vila' || fase === 'fim') { if (fase === 'vila') atualizaVila(dt); desenhaVila(dt); }
+    requestAnimationFrame(quadro);
+  }
+  const JOGO = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '];
+  function aperta(k) { if ((k === ' ' || k === 'Enter') && fase === 'vila') acaoVila(); }
+  addEventListener('keydown', e => {
+    const emBotao = document.activeElement && document.activeElement.tagName === 'BUTTON';
+    if (JOGO.includes(e.key) && (fase === 'rio' || fase === 'vila')) e.preventDefault();
+    if (!teclas[e.key] && !(emBotao && fase !== 'vila')) aperta(e.key);
+    teclas[e.key] = true;
+  });
+  addEventListener('keyup', e => { teclas[e.key] = false; });
+  addEventListener('blur', () => Object.keys(teclas).forEach(k => { teclas[k] = false; }));
+  addEventListener('resize', () => { if (K && fase !== 'margem') telaTam(W, H); });
+  document.querySelectorAll('#toque button').forEach(b => {
+    const k = b.dataset.k;
+    b.addEventListener('pointerdown', e => { e.preventDefault(); teclas[k] = true; aperta(k); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => { teclas[k] = false; }));
+  });
+  function atalhoTeste() { // só na prévia local: /jogo/?vila=0 abre o vilarejo do arranjo 0 com todas as áreas
+    const m = /[?&]vila=(\d)/.exec(location.search);
+    if (!m || location.hostname !== '127.0.0.1') return false;
+    const arr = ARRANJOS[+m[1]] || ARRANJOS[0];
+    esc = { arr, areas: new Set(Object.keys(AREAS).slice(0, CAP_AREAS + 1)), publico: new Set(arr.publico.slice(0, 2)), municipios: new Set(arr.municipios.slice(0, 1)), equipe: new Set(EQUIPE.slice(0, 3)) };
+    rio = { batidas: 0 }; telaVila();
+    window.__tarefa = id => { const tf = vila.tarefas.find(x => x.id === id); vila.x = tf.x; vila.y = tf.y; acaoVila(); };
+    return true;
+  }
+  carregarArte().then(kit => { K = kit; criarSprites(); if (!atalhoTeste()) telaTitulo(); requestAnimationFrame(quadro); })
+    .catch(err => { $('palco').innerHTML = '<p class="aviso">' + err.message + ' Abra o jogo pelo endereço do site.</p>'; });
+})();
+</script>
+</body>
+</html>

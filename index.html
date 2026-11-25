@@ -206,6 +206,8 @@
   #fundoEntrada { position: fixed; left: 0; top: 0; z-index: 0; image-rendering: pixelated; }
   .cartao-entrada { position: relative; z-index: 1; }
   .modo-rio .cartao-entrada { border: 3px solid #1c1424; border-radius: 6px; box-shadow: 0 8px 0 rgba(28,20,36,.35); }
+  .botao-jogo { display: block; margin-top: 10px; text-align: center; text-decoration: none; font-weight: 700; color: #1c1424; background: #ffc94a; border: 2px solid #1c1424; border-radius: 6px; padding: 8px 12px; box-shadow: 0 3px 0 rgba(28,20,36,.4); }
+  .botao-jogo:hover { background: #ffe07a; }
   .logo-entrada { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
   .logo-entrada img { width: 96px; height: 74px; image-rendering: pixelated; }
   .logo-entrada b { font-size: 24px; color: #44535f; }
@@ -309,6 +311,7 @@
       </div>
       <div class="erro" id="erroEntrada" role="alert"></div>
       <button class="primario" id="btnEntrar" style="width:100%">Entrar</button>
+      <a class="botao-jogo" href="jogo/">Não tem login? Conheça os arranjos jogando</a>
       <div class="instrucoes">
         <b class="tit">Primeiro acesso</b>
         <ul>
@@ -1330,7 +1333,11 @@ window.RIO = (function () {
     definir(m) { modo = m; try { localStorage.setItem(CHAVE, m); } catch (e) { /* ok */ } document.body.classList.toggle('modo-rio', m === 'rio'); },
     LOGO, icone, objeto, crew: () => CREW_C[0], corPublico: i => PUB_CORES[i % PUB_CORES.length],
     simboloParceiro, iconeFerramenta, nomeFerramenta: cod => FERRAMENTAS[simboloParceiro(cod)][0],
-    estagio: zonas => ESTAGIO[zonas], cena, fundoEntrada, painel
+    estagio: zonas => ESTAGIO[zonas], cena, fundoEntrada, painel,
+    // Peças de desenho para o minijogo público (jogo/index.html), que monta as próprias cenas com a mesma arte.
+    kit: { Spr, T, OL, SKINS, PUB_CORES, CASCA, GR, AG, AR, H, FAR, MARGEM, ESTRUTURAS, ESTAGIO, LOGO_P, CASA, CASA_X, CASA_Y,
+      ARVORES, ARBUSTOS, CAPIVARA, GARCA, PEDRA, TRALHA, ESCRITORIO, EMPURRA, CREW_C, BW, CY,
+      barco, desenharBarco, desenharAgua, desenharVida, desenharAves, desenharTrapiche, fundo, sombra, dither, az, tufo, painelSolar, box3, icone, parado }
   };
 })();
 document.body.classList.toggle('modo-rio', RIO.ligado());
