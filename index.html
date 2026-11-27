@@ -202,14 +202,14 @@
   /* Modo rio (front animado em pixel art). O botão "Visual" no cabeçalho volta ao clássico. */
   body:not(.modo-rio) .so-rio { display: none !important; }
   header { position: relative; z-index: 2; }
-  header .logo-px { width: 48px; height: 37px; image-rendering: pixelated; background: #fff; border-radius: 6px; padding: 2px; box-sizing: content-box; }
+  header .logo-px { width: calc(48px * var(--nit, 1)); height: calc(37px * var(--nit, 1)); image-rendering: pixelated; background: #fff; border-radius: 6px; padding: 2px; box-sizing: content-box; }
   #fundoEntrada { position: fixed; left: 0; top: 0; z-index: 0; image-rendering: pixelated; }
   .cartao-entrada { position: relative; z-index: 1; }
   .modo-rio .cartao-entrada { border: 3px solid #1c1424; border-radius: 6px; box-shadow: 0 8px 0 rgba(28,20,36,.35); }
   .botao-jogo { display: block; margin-top: 10px; text-align: center; text-decoration: none; font-weight: 700; color: #1c1424; background: #ffc94a; border: 2px solid #1c1424; border-radius: 6px; padding: 8px 12px; box-shadow: 0 3px 0 rgba(28,20,36,.4); }
   .botao-jogo:hover { background: #ffe07a; }
   .logo-entrada { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-  .logo-entrada img { width: 96px; height: 74px; image-rendering: pixelated; }
+  .logo-entrada img { width: calc(96px * var(--nit, 1)); height: calc(74px * var(--nit, 1)); image-rendering: pixelated; }
   .logo-entrada b { font-size: 24px; color: #44535f; }
   /* A cena fica presa no topo; embaixo, o cartão da canoa à esquerda e o balcão de itens à direita. */
   .modo-rio #telaMontagem { display: block; }
@@ -240,9 +240,9 @@
     .modo-rio #rio { position: sticky; top: 0; z-index: 5; }
     .modo-rio aside { position: sticky; top: calc(var(--palco, 0px) + 8px); max-height: max(200px, calc(100vh - var(--palco, 0px) - 20px)); }
   }
-  .modo-rio .peca canvas { width: 48px; height: 48px; image-rendering: pixelated; flex: none; }
-  .modo-rio .peca canvas.eq { width: 24px; height: 26px; }
-  .modo-rio .peca canvas.fer { width: 28px; height: 28px; }
+  .modo-rio .peca canvas { width: calc(48px * var(--nit, 1)); height: calc(48px * var(--nit, 1)); image-rendering: pixelated; flex: none; }
+  .modo-rio .peca canvas.eq { width: calc(24px * var(--nit, 1)); height: calc(36px * var(--nit, 1)); }
+  .modo-rio .peca canvas.fer { width: calc(28px * var(--nit, 1)); height: calc(28px * var(--nit, 1)); }
   .peca .cor { width: 14px; height: 18px; flex: none; clip-path: polygon(0 0, 100% 0, 100% 60%, 50% 100%, 0 60%); }
   .rio-rolagem { overflow-x: auto; border: 3px solid #1c1424; border-radius: 6px; background: #245a88; margin-bottom: 12px; }
   .rio-caixa { position: relative; margin: 0 auto; }
@@ -426,7 +426,58 @@ window.TRILHA = (function () {
     if (!relogio) relogio = setInterval(agendar, 100);
   }
   function desligar() { clearInterval(relogio); relogio = null; if (ctx) ctx.suspend(); }
+  // ----- Efeitos sonoros: sintetizados na hora (sem arquivos), no mesmo contexto de áudio e com o mesmo botão de mudo da trilha -----
+  let ruido = null, saidaFx = null; const ultimoFx = {};
+  function saida() { if (!saidaFx) { saidaFx = ctx.createGain(); saidaFx.gain.value = 0.9; saidaFx.connect(ctx.destination); } return saidaFx; }
+  // bip: oscilador que desliza de f0 a f1 (Hz) com ataque curto e queda exponencial
+  function bip(q, f0, f1, dur, vol, tipo) {
+    const o = ctx.createOscillator(), g = ctx.createGain(); o.type = tipo || 'square';
+    o.frequency.setValueAtTime(f0, q); if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, q + dur);
+    g.gain.setValueAtTime(0, q); g.gain.linearRampToValueAtTime(vol, q + 0.008); g.gain.exponentialRampToValueAtTime(0.0008, q + dur);
+    o.connect(g); g.connect(saida()); o.start(q); o.stop(q + dur + 0.03);
+  }
+  // chiado: ruído branco por um filtro passa-faixa que varre de f0 a f1 (água, vento, areia)
+  function chiado(q, dur, vol, f0, f1, Q) {
+    if (!ruido) { ruido = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate); const d = ruido.getChannelData(0); for (let k = 0; k < d.length; k++) d[k] = Math.random() * 2 - 1; }
+    const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(); s.buffer = ruido; s.loop = true;
+    f.type = 'bandpass'; f.Q.value = Q || 1; f.frequency.setValueAtTime(f0, q); f.frequency.exponentialRampToValueAtTime(f1, q + dur);
+    g.gain.setValueAtTime(0, q); g.gain.linearRampToValueAtTime(vol, q + 0.015); g.gain.exponentialRampToValueAtTime(0.0008, q + dur);
+    s.connect(f); f.connect(g); g.connect(saida()); s.start(q); s.stop(q + dur + 0.03);
+  }
+  const notas = (q, lista, dur, vol, tipo) => lista.forEach((n, k) => { const f = 440 * Math.pow(2, (n - 69) / 12); bip(q + k * dur * 0.8, f, f, dur * 1.6, vol, tipo); });
+  const FX = {
+    toque: q => bip(q, 880, 660, 0.05, 0.05),                                                    // botão comum
+    aba: q => bip(q, 520, 780, 0.06, 0.05, 'triangle'),                                          // troca de aba ou de barraca
+    peca: q => { bip(q, 180, 90, 0.07, 0.22, 'triangle'); bip(q + 0.04, 660, 990, 0.08, 0.05); },  // item embarca: toc na madeira e subida
+    tira: q => bip(q, 700, 350, 0.1, 0.05),                                                      // item sai
+    nova: q => { bip(q, 140, 70, 0.12, 0.28, 'triangle'); chiado(q, 0.12, 0.06, 900, 400); },      // canoa nova na areia
+    selecao: q => bip(q, 600, 600, 0.04, 0.04, 'triangle'),
+    arrasto: q => chiado(q, 0.5, 0.1, 300, 1400, 0.8),                                           // casco arrastando na areia
+    agua: q => { chiado(q, 0.5, 0.2, 1800, 500, 0.7); bip(q, 160, 60, 0.25, 0.18, 'sine'); },      // a canoa entra na água
+    zarpar: q => notas(q, [72, 76, 79, 84], 0.12, 0.07),                                         // ancorou no rio
+    pingo: q => { bip(q, 900, 1500, 0.06, 0.025, 'sine'); chiado(q + 0.03, 0.15, 0.025, 2500, 1200, 2); }, // peixe saltando
+    erro: q => bip(q, 160, 120, 0.18, 0.1, 'sawtooth'),
+    concluir: q => notas(q, [67, 72, 76, 79, 84, 88], 0.16, 0.08),                               // regional concluída / fim do jogo
+    feito: q => notas(q, [76, 79, 84], 0.11, 0.07),                                              // tarefa cumprida
+    batida: q => { bip(q, 120, 50, 0.2, 0.3, 'triangle'); chiado(q, 0.3, 0.18, 1500, 400, 0.8); },
+    redemoinho: q => { bip(q, 500, 180, 0.7, 0.06, 'sawtooth'); chiado(q, 0.7, 0.08, 600, 1800, 3); },
+    remo: q => chiado(q, 0.16, 0.035, 900, 1500, 1.5),
+    passo: q => chiado(q, 0.05, 0.03, 500, 300, 2),
+    trabalho: q => bip(q, 300, 200, 0.04, 0.08, 'triangle'),
+    drone: q => bip(q, 180, 220, 0.3, 0.03, 'sawtooth')
+  };
+  function sfx(nome) {
+    if (mudo || !ctx || ctx.state !== 'running' || !FX[nome]) return;
+    const agora = ctx.currentTime; if (agora - (ultimoFx[nome] || -1) < 0.04) return; ultimoFx[nome] = agora; // o mesmo efeito não empilha
+    try { FX[nome](agora + 0.005); } catch (e) { /* som é enfeite: nunca atrapalha a tela */ }
+  }
+  // Cliques comuns: peça do balcão, aba e demais botões ganham o seu som sem cada tela precisar chamar.
+  document.addEventListener('click', function (ev) {
+    const alvo = ev.target.closest ? ev.target.closest('button, .peca, a.botao-jogo') : null; if (!alvo || alvo.disabled || alvo.closest('#toque')) return; // os botões de toque do jogo já têm os sons da ação
+    sfx(alvo.closest('.abas') ? 'aba' : alvo.classList.contains('peca') ? (alvo.getAttribute('aria-pressed') === 'true' ? 'tira' : 'peca') : 'toque');
+  }, true);
   return {
+    sfx: sfx,
     mudo: function () { return mudo; },
     alternar: function () {
       mudo = !mudo; try { localStorage.setItem(CHAVE, mudo ? 'mudo' : 'som'); } catch (e) { /* ok */ }
@@ -448,81 +499,283 @@ window.RIO = (function () {
   try { modo = localStorage.getItem(CHAVE) || 'rio'; } catch (e) { /* armazenamento bloqueado: fica o padrão */ }
   const parado = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAlCAYAAAAEGWqvAAACqklEQVR42tVZPY/TQBCdOeUqiqRIlVzpgoLSQldEFPcL3FDyB65BOq3QiQZBhZCFREONRHkS2l9AleJ0yg+g2A64iiIUVEHaq8as1/sxXq+TY5o4Xtt5b+fN7FsH4D+KelPpelNp89xkHz9Kx6KUmPoM+QNA3Bx3xnAs0O+/vgUAgN8/f7XGpss5XJxdssgQ8PVtG3j9eNfcj2OBt4HbMV3O4fbFQwwBB+iCXy12UJ3AOATqTaVffRbs610kbPAE2CfBrAQW777p2Mzb8fpZDaKUSLVC4G3Q5jgRW1cS8ZDgzZowwyZky6iJ8yucHLo1ukivZKVdHccl2cmYQLhBskmJSb7iHfYM0vy/7ztn0SqltNyKbhGT5lIXmwfP1zoVfKilsjNgV7vrfIjcdDlPltHF2SUIT2arWR28FzkWIBailJjahQAA/nxYYQp41jrQhwiFz0ZQ6O+qOX7zUnplq5TSgwnYRMyOYRcejZvnicz2+rpz7ez0lK19HxlMdYZ2B6lmNcitcLZEGn/y5W9Dpg94H5GiKHCQvXUBpVXUNx7rdLb2i6LALBLikLDNl2vc5Si5updb0bkHhy5gJkjTs5Bn93l6IrKu2oA4hWtmBnOswjGAoWvsDUpfEpjLSvjMF5eEnY0YiWwZyEmiTzayEyAbHJvhHCTMznSUk4BdkHYHIj/lWgBb1uTmuOUAQq00KwGavRAwpZQWpcTQdSESNplRXqvAx6feAjSLNSQ5c9sYGj4aA39odklKAACfHtWsuto7Ae4WsiiKqJRMwnsjIEqJqwUvC6k7wNEzEOs0XMnZLfVeSIi6DIdYLEPjZYCxHaQFygWSA35UAjEfT/bYbK/N5/kVcmvj4G/mWru2k13vor43BFK70UEImLu2oYGwp7+XqLA5tdEn7gBridFQjj2KPwAAAABJRU5ErkJggg==';
-  const LOGO_P = new Image(); LOGO_P.onload = () => Object.keys(fundos).forEach(k => delete fundos[k]); LOGO_P.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAATCAYAAACKsM07AAABcElEQVR42rWUL27DMBTGP1cJGuhAUJoDjE6KIoOQ9QQmu8TIpMqaykarKSrcBQZHcoKigCjKAXaALmhgwwEeiF6bvvw1qEnkZ/v9nr/3OcAVRlIqk5TKAIBjc2h/2OHv+wcAsFx5qF7uBN+jCxe6AGK/BgCIuclfP3QnTpCkVCY9NjEVXO6ZBfDfvgxV3gfZrLenuS7cc2FRPQ9w85yZsfX7h2RwzbnQL0yFbUOXKw+ZGj53AugwFdR5PvYHD0MSbdZb6J54nudmsAfUNN6wBrYDAPzmOW6l7DipDZBSCjHmHO4MmlNsjqSTG+JUmaxyEfs1VNBAsqpxSuzXHf1JGimlAIDFFICqzyoXunChgsZ+FMP7o+nrHYEmATpMBSVs+5zHCEKV03e2LUmq03j6FDyWRHWnL4u5AO6opFSG69++iTWAV9YnFXeaFYBcw2/B1/mtrABcpvR4vllfcmvA4KOM6sH/kWObjB5cuy9jL/ofo4SxHzN/atQAAAAASUVORK5CYII=';
+  const LOGO_P = new Image(); LOGO_P._r = 2; LOGO_P.onload = () => Object.keys(fundos).forEach(k => delete fundos[k]); LOGO_P.src = LOGO;
 
   // ---------- sprites ----------
-  const OL = '#1c1424';
-  const T = {
-    wood: ['#5a3622', '#8a5634', '#bd8550'], jute: ['#7d5f3c', '#ab8656', '#d6b47e'], red: ['#7e2533', '#c2413b', '#f07a5a'],
-    grn: ['#24563a', '#3f8a3e', '#86c25a'], dgrn: ['#1d3d2c', '#2f6a3a', '#5aa048'], yel: ['#a8701c', '#e0ac34', '#ffe07a'],
-    wht: ['#8e98ad', '#d6dce8', '#ffffff'], mtl: ['#46506a', '#7f8ca6', '#c6d0e2'], blu: ['#1d4a78', '#3678bd', '#82c6f0'],
-    org: ['#97461c', '#e0782a', '#ffb45c'], crm: ['#a88a5c', '#e5cf9e', '#fff3cf'], cop: ['#7a3a20', '#c0683a', '#f0a070'],
-    brn: ['#4a3020', '#6e4a30', '#9a6c48'], ter: ['#7a3420', '#b85a32', '#e08a5a'], gourd: ['#4a3a1e', '#7a6230', '#a8904a'],
-    mus: ['#1a1a2a', '#2e3550', '#5a6a90'], fish: ['#3a5a7a', '#7aa0c0', '#d0e6f5'], lea: ['#5a2a1a', '#8a4a2a', '#b8723f'],
-    gry: ['#5a6470', '#8a96a4', '#c4ccd6']
-  };
-  const SKINS = [['#8a5a3c', '#b07850'], ['#c08a60', '#e0b088'], ['#5a3828', '#7a5038'], ['#d8a880', '#f2c8a0']];
+  // ---------- cor (regras em reports/Luz e cor em pixel art.md) ----------
+  // Sombra puxa para o frio (azul-violeta), luz puxa para o quente (amarelo), em OKLCH: nada de escurecer multiplicando RGB.
+  const s2l = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const l2s = c => c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+  function hexToOklch(hex) {
+    const n = parseInt(hex.slice(1), 16), r = s2l(n >> 16), g = s2l((n >> 8) & 255), b = s2l(n & 255);
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b), m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b), s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    const L = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s, A = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s, B = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
+    return [L, Math.hypot(A, B), (Math.atan2(B, A) * 180 / Math.PI + 360) % 360];
+  }
+  function oklchToLinear(L, C, h) {
+    const a = C * Math.cos(h * Math.PI / 180), b = C * Math.sin(h * Math.PI / 180);
+    const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3, m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3, s = (L - 0.0894841775 * a - 1.2914855480 * b) ** 3;
+    return [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s, -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s];
+  }
+  function oklchToHex(L, C, h) { // reduz a croma até caber no sRGB
+    L = Math.min(1, Math.max(0, L));
+    const cabe = c => oklchToLinear(L, c, h).every(v => v >= -1e-4 && v <= 1 + 1e-4);
+    let c = C; if (!cabe(c)) { let lo = 0, hi = C; for (let i = 0; i < 20; i++) { const mid = (lo + hi) / 2; if (cabe(mid)) lo = mid; else hi = mid; } c = lo; }
+    return '#' + oklchToLinear(L, c, h).map(v => Math.round(255 * Math.min(1, Math.max(0, l2s(Math.min(1, Math.max(0, v)))))).toString(16).padStart(2, '0')).join('');
+  }
+  const HUE_SOMBRA = 265, HUE_LUZ = 95, L_MIN = 0.16, L_MAX = 0.97;
+  function rumoAoMatiz(h, alvo, maxGraus, viaVermelho) { // matizes quentes escurecem via vermelho, não via verde
+    let d = ((alvo - h + 540) % 360) - 180; if (viaVermelho && h < 120 && d > 0) d -= 360;
+    return (h + Math.sign(d) * Math.min(Math.abs(d), maxGraus) + 360) % 360;
+  }
+  const aprox = (L, lim, dL, a) => { const folga = Math.abs(lim - L) + 1e-6; return L + (lim - L) * (1 - Math.pow(1 - Math.min(0.7, dL / folga), a)); };
+  const tons = {};
+  /** tom(cor, k): k < 0 sombra, k > 0 luz; |k| = 1 é um degrau da rampa (0,11 de claridade e até 10° de matiz). */
+  function tom(hex, k, o) {
+    if (!k || typeof hex !== 'string') return hex;
+    const dL = o && o.dL || 0.11, dH = o && o.dH || 10, chave = hex + k + (o ? dL + ':' + dH : ''); if (tons[chave]) return tons[chave];
+    const a = Math.abs(k), [L, C, h] = hexToOklch(hex), L2 = aprox(L, k < 0 ? L_MIN : L_MAX, dL, a); let h2, C2;
+    if (C < 0.02) { h2 = k < 0 ? HUE_SOMBRA : HUE_LUZ; C2 = C + 0.012 * a; }
+    else if (k < 0) { h2 = rumoAoMatiz(h, HUE_SOMBRA, dH * a, true); C2 = C * Math.pow(L2 / L, 0.8) * (1 + 0.10 * a); }
+    else { h2 = rumoAoMatiz(h, HUE_LUZ, dH * a, false); C2 = C * (1 - 0.12 * a); }
+    return tons[chave] = oklchToHex(L2, C2, h2);
+  }
+  const rampa = (hex, n = 5, o) => { const m = (n - 1) / 2; return Array.from({ length: n }, (_, i) => tom(hex, i - m, o)); };
+  const trio = hex => rampa(hex, 3, { dL: 0.15, dH: 14 }); // [sombra, base, luz] para objetos pequenos
+  const contornos = {};
+  /** Contorno colorido: 2,5 degraus abaixo do material (2 no arco voltado para a luz), nunca claro demais. */
+  function contorno(hex, luz) {
+    const chave = hex + (luz ? 'L' : ''); if (contornos[chave]) return contornos[chave];
+    const c = tom(hex, luz ? -2 : -2.5), [L2, C2, h2] = hexToOklch(c), teto = luz ? 0.38 : 0.30;
+    return contornos[chave] = L2 > teto ? oklchToHex(teto, C2, h2) : c;
+  }
+  /** Perspectiva atmosférica: mistura em OKLab rumo à cor do céu, t de 0 a 1. */
+  function distante(hex, t, ceu = '#b2dcef') {
+    const p = x => { const [L, C, h] = hexToOklch(x); return [L, C * Math.cos(h * Math.PI / 180), C * Math.sin(h * Math.PI / 180)]; };
+    const a = p(hex), b = p(ceu), m = a.map((v, i) => v + (b[i] - v) * t);
+    return oklchToHex(m[0], Math.hypot(m[1], m[2]), (Math.atan2(m[2], m[1]) * 180 / Math.PI + 360) % 360);
+  }
+  // Acaso com semente (o desenho sai sempre igual) e pontilhado ordenado.
+  const hash = (x, y, k = 0) => { let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(k | 0, 982451653); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+  const bayer = (x, y) => (BAYER[(y & 3) * 4 + (x & 3)] + .5) / 16;
+
+  const OL = '#1b1a2e'; // escuro comum: contorno das pessoas e olhos; nunca preto puro
+  const T = {};
+  Object.entries({ wood: '#bb7547', jute: '#ab8656', red: '#b33831', grn: '#3e8948', dgrn: '#265c42', yel: '#e0ac34', wht: '#d6dce8', mtl: '#8b93af', blu: '#3f7fc8',
+    org: '#e0782a', crm: '#ead4aa', cop: '#c0683a', brn: '#71413b', ter: '#b85a32', gourd: '#7a6230', mus: '#2e3550', fish: '#7aa0c0', lea: '#8a4a2a', gry: '#8a96a4' }).forEach(([k, base]) => { T[k] = trio(base); });
+  const SKINS = [['#854b4f', '#ba756a'], ['#b78680', '#e9b5a3'], ['#5a2d37', '#8e5252'], ['#a77575', '#d9a593']]; // [sombra, base]: média, clara, escura, morena clara
   const PUB_CORES = ['#e0ac34', '#d0507a', '#7cc36a', '#c6d0e2', '#e0782a', '#8a5634', '#3f8a3e', '#3678bd', '#a77bd0', '#86c25a', '#c2413b', '#2fb0a0', '#f07a5a', '#ffe07a'];
 
+  // HD: pixels finos por pixel lógico. Os desenhos das cenas continuam escritos em pixels lógicos (a grade antiga), mas saem
+  // com o dobro da resolução: curvas e linhas são calculadas direto na grade fina, os degraus dos blocos são alisados e o
+  // contorno tem um pixel fino. Os ícones de 48x48 (spr48) já nasceram finos e ficam em r = 1, um pixel por pixel.
+  const HD = 2;
   class Spr {
-    constructor(w, h) { this.w = w; this.h = h; this.p = new Array(w * h).fill(null); }
-    set(x, y, c) { x = Math.round(x); y = Math.round(y); if (x >= 0 && y >= 0 && x < this.w && y < this.h) this.p[y * this.w + x] = c; return this; }
-    get(x, y) { return (x >= 0 && y >= 0 && x < this.w && y < this.h) ? this.p[y * this.w + x] : null; }
-    rect(x, y, w, h, c) { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this.set(x + i, y + j, c); return this; }
-    sRect(x, y, w, h, t) { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this.set(x + i, y + j, (i == 0 || j == 0) ? t[2] : (i == w - 1 || j == h - 1) ? t[0] : t[1]); return this; }
-    ell(cx, cy, rx, ry, c) { for (let y = Math.floor(cy - ry); y <= cy + ry; y++) for (let x = Math.floor(cx - rx); x <= cx + rx; x++) { const dx = (x - cx) / rx, dy = (y - cy) / ry; if (dx * dx + dy * dy <= 1) this.set(x, y, c); } return this; }
+    constructor(w, h, r = HD) { this.w = w; this.h = h; this.r = r; this.fw = w * r; this.fh = h * r; this.e = (r - 1) / (2 * r); this.liso = r < 2; this.p = new Array(this.fw * this.fh).fill(null); }
+    f(X, Y, c) { if (X >= 0 && Y >= 0 && X < this.fw && Y < this.fh) this.p[Y * this.fw + X] = c; }
+    g(X, Y) { return (X >= 0 && Y >= 0 && X < this.fw && Y < this.fh) ? this.p[Y * this.fw + X] : null; }
+    bloco(X, Y, W, H, c) { for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) this.f(X + i, Y + j, c); return this; }
+    set(x, y, c) { const r = this.r; return this.bloco(Math.round(x * r), Math.round(y * r), r, r, c); }
+    dot(x, y, c) { this.f(Math.round(x * this.r), Math.round(y * this.r), c); return this; } // um pixel fino só
+    get(x, y) { const r = this.r; return this.g(Math.round(x * r), Math.round(y * r)); }
+    rect(x, y, w, h, c) { const r = this.r, X = Math.round(x * r), Y = Math.round(y * r); return this.bloco(X, Y, Math.round((x + w) * r) - X, Math.round((y + h) * r) - Y, c); }
+    sRect(x, y, w, h, t) {
+      const r = this.r, X = Math.round(x * r), Y = Math.round(y * r), W = Math.round((x + w) * r) - X, H = Math.round((y + h) * r) - Y;
+      for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) this.f(X + i, Y + j, (i < r || j < r) ? t[2] : (i >= W - r || j >= H - r) ? t[0] : t[1]);
+      return this;
+    }
+    // Varre a grade fina dentro de uma caixa lógica; fn recebe o centro de cada pixel fino em coordenadas lógicas.
+    varre(x0, y0, x1, y1, fn) {
+      const r = this.r;
+      for (let Y = Math.floor(y0 * r) - 1; Y <= Math.ceil(y1 * r) + r; Y++) for (let X = Math.floor(x0 * r) - 1; X <= Math.ceil(x1 * r) + r; X++) { const c = fn((X + .5) / r - .5, (Y + .5) / r - .5); if (c !== undefined) this.f(X, Y, c); }
+      return this;
+    }
+    ell(cx, cy, rx, ry, c) { rx += this.e; ry += this.e; return this.varre(cx - rx, cy - ry, cx + rx, cy + ry, (x, y) => { const dx = (x - cx) / rx, dy = (y - cy) / ry; if (dx * dx + dy * dy <= 1) return c; }); }
     sEll(cx, cy, rx, ry, t) {
-      for (let y = Math.floor(cy - ry); y <= cy + ry; y++) for (let x = Math.floor(cx - rx); x <= cx + rx; x++) {
-        const dx = (x - cx) / rx, dy = (y - cy) / ry; if (dx * dx + dy * dy > 1) continue;
-        const v = -(dx * .6 + dy * .8); this.set(x, y, v > .4 ? t[2] : v < -.3 ? t[0] : t[1]);
-      } return this;
+      rx += this.e; ry += this.e;
+      return this.varre(cx - rx, cy - ry, cx + rx, cy + ry, (x, y) => { const dx = (x - cx) / rx, dy = (y - cy) / ry; if (dx * dx + dy * dy > 1) return; const v = -(dx * .6 + dy * .8); return v > .4 ? t[2] : v < -.3 ? t[0] : t[1]; });
     }
     line(x0, y0, x1, y1, c) {
-      x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1);
+      const r = this.r; x0 = Math.round(x0 * r); y0 = Math.round(y0 * r); x1 = Math.round(x1 * r); y1 = Math.round(y1 * r);
       const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1; let e = dx + dy;
-      for (;;) { this.set(x0, y0, c); if (x0 == x1 && y0 == y1) break; const e2 = 2 * e; if (e2 >= dy) { e += dy; x0 += sx; } if (e2 <= dx) { e += dx; y0 += sy; } }
+      for (;;) { this.bloco(x0, y0, r, r, c); if (x0 == x1 && y0 == y1) break; const e2 = 2 * e; if (e2 >= dy) { e += dy; x0 += sx; } if (e2 <= dx) { e += dx; y0 += sy; } }
       return this;
     }
     rEll(cx, cy, rx, ry, a, t) { // elipse girada (rx no eixo do ângulo); t = cor ou trio [sombra, base, luz]
-      const R = Math.max(rx, ry) + 1, co = Math.cos(a), si = Math.sin(a);
-      for (let y = Math.floor(cy - R); y <= cy + R; y++) for (let x = Math.floor(cx - R); x <= cx + R; x++) {
-        const dx = x - cx, dy = y - cy, u = (dx * co + dy * si) / rx, v = (dy * co - dx * si) / ry; if (u * u + v * v > 1) continue;
-        const w = -((u * co - v * si) * .6 + (u * si + v * co) * .8); this.set(x, y, Array.isArray(t) ? (w > .4 ? t[2] : w < -.3 ? t[0] : t[1]) : t);
-      } return this;
+      rx += this.e; ry += this.e;
+      const R = Math.max(rx, ry) + 1, co = Math.cos(a), si = Math.sin(a), trio = Array.isArray(t);
+      return this.varre(cx - R, cy - R, cx + R, cy + R, (x, y) => {
+        const dx = x - cx, dy = y - cy, u = (dx * co + dy * si) / rx, v = (dy * co - dx * si) / ry; if (u * u + v * v > 1) return;
+        const w = -((u * co - v * si) * .6 + (u * si + v * co) * .8); return trio ? (w > .4 ? t[2] : w < -.3 ? t[0] : t[1]) : t;
+      });
     }
     cap(x0, y0, x1, y1, r0, r1, t) { // tubo de raio r0 até r1, sombreado
+      r0 += this.e; r1 += this.e;
       const R = Math.max(r0, r1) + 1, vx = x1 - x0, vy = y1 - y0, L2 = vx * vx + vy * vy || 1;
-      for (let y = Math.floor(Math.min(y0, y1) - R); y <= Math.max(y0, y1) + R; y++) for (let x = Math.floor(Math.min(x0, x1) - R); x <= Math.max(x0, x1) + R; x++) {
-        const u = Math.max(0, Math.min(1, ((x - x0) * vx + (y - y0) * vy) / L2)), r = r0 + (r1 - r0) * u, dx = x - x0 - vx * u, dy = y - y0 - vy * u; if (dx * dx + dy * dy > r * r) continue;
-        const w = -(dx * .6 + dy * .8) / r; this.set(x, y, w > .4 ? t[2] : w < -.3 ? t[0] : t[1]);
-      } return this;
+      return this.varre(Math.min(x0, x1) - R, Math.min(y0, y1) - R, Math.max(x0, x1) + R, Math.max(y0, y1) + R, (x, y) => {
+        const u = Math.max(0, Math.min(1, ((x - x0) * vx + (y - y0) * vy) / L2)), r = r0 + (r1 - r0) * u, dx = x - x0 - vx * u, dy = y - y0 - vy * u; if (dx * dx + dy * dy > r * r) return;
+        const w = -(dx * .6 + dy * .8) / r; return w > .4 ? t[2] : w < -.3 ? t[0] : t[1];
+      });
     }
     poly(pts, c) {
-      const ys = pts.map(p => p[1]);
-      for (let y = Math.ceil(Math.min(...ys)); y <= Math.max(...ys); y++) {
-        const xs = []; pts.forEach((p, i) => { const q = pts[(i + 1) % pts.length]; if ((p[1] <= y) !== (q[1] <= y)) xs.push(p[0] + (y - p[1]) / (q[1] - p[1]) * (q[0] - p[0])); });
-        xs.sort((m, n) => m - n); for (let i = 0; i + 1 < xs.length; i += 2) for (let x = Math.round(xs[i]); x <= Math.round(xs[i + 1]); x++) this.set(x, y, c);
+      const r = this.r, ys = pts.map(p => p[1]);
+      for (let Y = Math.floor(Math.min(...ys) * r) - r; Y <= Math.ceil(Math.max(...ys) * r) + r; Y++) {
+        const y = (Y + .5) / r - .5, xs = []; pts.forEach((p, i) => { const q = pts[(i + 1) % pts.length]; if ((p[1] <= y) !== (q[1] <= y)) xs.push(p[0] + (y - p[1]) / (q[1] - p[1]) * (q[0] - p[0])); });
+        xs.sort((m, n) => m - n); for (let i = 0; i + 1 < xs.length; i += 2) for (let X = Math.round(xs[i] * r); X <= Math.round(xs[i + 1] * r) + r - 1; X++) this.f(X, Y, c);
       } return this;
     }
-    blit(o, x, y) { for (let j = 0; j < o.h; j++) for (let i = 0; i < o.w; i++) { const c = o.get(i, j); if (c) this.set(x + i, y + j, c); } return this; }
-    outline(c = OL) {
-      const q = [];
-      for (let y = 0; y < this.h; y++) for (let x = 0; x < this.w; x++)
-        if (!this.get(x, y) && (this.get(x + 1, y) || this.get(x - 1, y) || this.get(x, y + 1) || this.get(x, y - 1))) q.push([x, y]);
-      q.forEach(([x, y]) => this.set(x, y, c)); return this;
+    blit(o, x, y) {
+      const r = this.r, k = o.r / r, X0 = Math.round(x * r), Y0 = Math.round(y * r);
+      for (let j = 0; j < o.h * r; j++) for (let i = 0; i < o.w * r; i++) { const c = o.g(Math.floor(i * k), Math.floor(j * k)); if (c) this.f(X0 + i, Y0 + j, c); }
+      return this;
+    }
+    // Alisa os degraus dos blocos lógicos (regra Scale2x): diagonais e cantos ganham o meio pixel que faltava.
+    // Só mexe em bloco inteiro de uma cor; o que já foi desenhado fino (curvas, linhas, contorno) fica como está.
+    alisar() {
+      if (this.liso) return this; this.liso = true;
+      const r = this.r, a = this.p.slice(), fw = this.fw, fh = this.fh, G = (X, Y) => (X >= 0 && Y >= 0 && X < fw && Y < fh) ? a[Y * fw + X] : null;
+      for (let Y = 0; Y < fh; Y += r) for (let X = 0; X < fw; X += r) {
+        const E = G(X, Y); if (G(X + 1, Y) !== E || G(X, Y + 1) !== E || G(X + 1, Y + 1) !== E) continue;
+        const B = G(X, Y - 1), D = G(X - 1, Y), F = G(X + r, Y), H = G(X, Y + r);
+        if (B === H || D === F) continue;
+        if (D === B) this.p[Y * fw + X] = D; if (B === F) this.p[Y * fw + X + 1] = F;
+        if (D === H) this.p[(Y + 1) * fw + X] = D; if (H === F) this.p[(Y + 1) * fw + X + 1] = F;
+      }
+      return this;
+    }
+    // Disco por linhas inteiras e tufo iluminado (folhagem): a claridade segue a luz do alto à esquerda, a borda é irregular
+    // por semente e a textura aparece só perto das divisas de tom. R = rampa de 5 tons, do escuro ao claro.
+    disc(cx, cy, rx, ry, c) {
+      const r = this.r, CX = Math.round(cx * r), CY = Math.round(cy * r), RX = rx * r, RY = ry * r;
+      for (let dy = -Math.ceil(RY); dy <= Math.ceil(RY); dy++) { const q = 1 - (dy / (RY + .5)) ** 2; if (q <= 0) continue; const hw = Math.round(RX * Math.sqrt(q)); for (let dx = -hw; dx <= hw; dx++) this.f(CX + dx, CY + dy, c); }
+      return this;
+    }
+    tufoLuz(cx, cy, rx, ry, R, sem, nivel = 0, amp = .3) {
+      const r = this.r, CX = Math.round(cx * r), CY = Math.round(cy * r), RX = rx * r, RY = ry * r;
+      for (let dy = -Math.ceil(RY); dy <= Math.ceil(RY); dy++) {
+        const q = 1 - (dy / (RY + .5)) ** 2; if (q <= 0) continue;
+        const hw = Math.round(RX * Math.sqrt(q) + (hash(dy, sem, 1) - .5) * 3); if (hw < 0) continue;
+        for (let dx = -hw; dx <= hw; dx++) {
+          const x = CX + dx, y = CY + dy, l = .5 - .32 * dx / RX - .42 * dy / RY + (hash(x >> 1, y >> 1, sem) - .5) * amp - (Math.abs(dx) > hw - 2 ? .2 : 0) + nivel * .25;
+          this.f(x, y, R[Math.max(0, Math.min(nivel > 0 ? 4 : 3, Math.floor(l * 4 + bayer(x >> 1, y >> 1) * .9)))]);
+        }
+      }
+      return this;
+    }
+    // Contorno de um pixel fino, por fora da silhueta. 'colorido' (cenário, barcos, bancas): tom escuro do material vizinho,
+    // um pouco mais claro no arco voltado para a luz. 'comum' (pessoas): o escuro comum. Nada na base de quem pisa o chão,
+    // e vão estreito entre duas partes do mesmo desenho fica aberto.
+    outline(modo = 'colorido') {
+      this.alisar(); const fw = this.fw, fh = this.fh, a = this.p.slice(), G = (X, Y) => (X >= 0 && Y >= 0 && X < fw && Y < fh) ? a[Y * fw + X] : null;
+      const fixo = modo === 'comum' ? OL : modo[0] === '#' ? modo : null; let fundo = -1;
+      for (let i = a.length - 1; i >= 0; i--) if (a[i]) { fundo = Math.floor(i / fw); break; }
+      for (let Y = 0; Y < fh; Y++) for (let X = 0; X < fw; X++) {
+        if (a[Y * fw + X] || Y > fundo) continue;
+        const E = G(X - 1, Y), D = G(X + 1, Y), C = G(X, Y - 1), B = G(X, Y + 1); if (!(E || D || C || B)) continue;
+        if (!fixo && ((E && D) || (C && B))) continue;
+        const v = B || D || E || C; this.p[Y * fw + X] = fixo || (v === OL ? OL : contorno(v, !!(B || D) && !(C || E)));
+      }
+      return this;
     }
     canvas() {
-      const cv = document.createElement('canvas'); cv.width = this.w; cv.height = this.h;
-      const ctx = cv.getContext('2d'), id = ctx.createImageData(this.w, this.h);
+      this.alisar();
+      const cv = document.createElement('canvas'); cv.width = this.fw; cv.height = this.fh; cv._r = this.r; cv.lw = this.w; cv.lh = this.h;
+      const ctx = cv.getContext('2d'), id = ctx.createImageData(this.fw, this.fh);
       this.p.forEach((c, i) => { if (!c) return; const n = parseInt(c.slice(1), 16); id.data.set([n >> 16, (n >> 8) & 255, n & 255, 255], i * 4); });
       ctx.putImageData(id, 0, 0); return cv;
     }
   }
+  // Tela em pixels lógicos sobre uma grade fina: tudo o que desenha na cena continua usando as medidas lógicas.
+  // drawImage sem tamanho usa o tamanho lógico do desenho (img._r pixels finos por pixel lógico); com recorte, o recorte é lógico.
+  function hd(ctx) {
+    if (!ctx._r) {
+      const des = ctx.drawImage; ctx._r = HD;
+      ctx.drawImage = function (img, a, b, c, d, e, f, g, h) {
+        const q = img._r || 1;
+        if (arguments.length === 3) return des.call(ctx, img, a, b, img.width / q, img.height / q);
+        if (arguments.length === 5) return des.call(ctx, img, a, b, c, d);
+        return des.call(ctx, img, a * q, b * q, c * q, d * q, e, f, g, h);
+      };
+    }
+    ctx.setTransform(HD, 0, 0, HD, 0, 0); ctx.imageSmoothingEnabled = false; return ctx;
+  }
+  // ---------- peças de detalhe, desenhadas na grade fina (medidas em pixels lógicos, com passos de meio pixel) ----------
+  const OLHO = '#1a1010'; // marrom muito escuro (regra 9.8)
+  // Rosto de 4 de largura, pele em dois tons: faixa de sombra do chapéu ou da franja no alto (sb de altura), coluna fina de
+  // sombra à direita e olhos de 1x2 pixels finos em y + oy. Sem boca, sem nariz, sem brilho.
+  const rosto = (s, x, y, skin, h, oy, sb = 1) => {
+    s.rect(x, y, 4, h, skin[1]); s.rect(x, y, 4, sb, skin[0]); s.rect(x + 3.5, y, .5, h, skin[0]);
+    s.rect(x + 1, y + oy, .5, 1, OLHO); s.rect(x + 2.5, y + oy, .5, 1, OLHO);
+  };
+  // Chapéu de palha, 10 de largura, de y + .5 a y + 3.5 (meio pixel livre em cima para o contorno): copa 4x2 com luz no alto
+  // à esquerda e fita no tom de sombra; aba 10x1 com luz na borda esquerda e de cima e sombra na metade direita.
+  const chapeuPalha = (s, x, y) => {
+    const [sb, b, l] = T.yel;
+    s.rect(x + 3, y + .5, 4, 1.5, b); s.rect(x + 3.5, y + .5, 1.5, .5, l); s.rect(x + 3, y + 1, 1, .5, l); s.rect(x + 6.5, y + 1, .5, 1, sb); s.dot(x + 3, y + .5, null); s.dot(x + 6.5, y + .5, null);
+    s.rect(x + 3, y + 2, 4, .5, sb);
+    s.rect(x, y + 2.5, 10, 1, b); s.rect(x + .5, y + 2.5, 5, .5, l); s.dot(x, y + 3, l); s.rect(x + 5, y + 3, 5, .5, sb);
+    s.dot(x, y + 2.5, null); s.dot(x + 9.5, y + 2.5, null);
+  };
+  // Escurece o que já está pintado (sombra de um objeto sobre outro, regra 5.8): cada material cai para o seu próprio tom de sombra.
+  const escurece = (s, x, y, w, h, k = -1) => {
+    const r = s.r, X = Math.round(x * r), Y = Math.round(y * r), W = Math.round((x + w) * r) - X, A = Math.round((y + h) * r) - Y;
+    for (let j = 0; j < A; j++) for (let i = 0; i < W; i++) { const c = s.g(X + i, Y + j); if (c) s.f(X + i, Y + j, tom(c, k)); }
+    return s;
+  };
+  // Telha de barro (regra 10.11): fiadas de 2,5 (1 linha fina de sombra sob a fiada de cima, 3 de base, 1 de luz na beira), juntas de
+  // 1 px fino a cada 4, defasadas meia telha em fiadas alternadas; a primeira linha é a luz da cumeeira. rec recorta os cantos de cima.
+  const telhas = (s, x0, y0, w, h, TL, rec = 0) => {
+    for (let y = 0; y < h; y += .5) {
+      const fi = Math.floor(y / 2.5), f = y - fi * 2.5, r = Math.max(0, rec - y);
+      for (let x = r; x < w - r; x += .5) s.dot(x0 + x, y0 + y, y < .5 || f >= 2 ? TL[2] : f < .5 || (x + (fi % 2) * 2) % 4 < .5 ? TL[0] : TL[1]);
+    }
+  };
+  // Telha metálica (regra 10.12): ondas de passo px em faixas chapadas (luz, base, sombra), luz na cumeeira, sombra na beira; sem pontilhado.
+  const chapa = (s, x0, y0, w, h, TE, passo = 3) => {
+    for (let y = 0; y < h; y += .5) for (let x = 0; x < w; x += .5) { const u = (x % passo) / passo; s.dot(x0 + x, y0 + y, y < .5 ? TE[2] : y >= h - .5 ? TE[0] : u < .3 ? TE[2] : u < .8 ? TE[1] : TE[0]); }
+  };
+  // Janela (regra 10.13): moldura chapada com luz em cima e no peitoril, vidro escuro azulado com a sombra da verga, travessas finas
+  // e um traço diagonal de luz no canto de cima à esquerda.
+  const janela = (s, x, y, w, h, mold = T.wood[1]) => {
+    const gx = x + 1, gy = y + 1, gw = w - 2, gh = h - 2, luz = tom(mold, 1), sb = tom(mold, -1);
+    s.rect(x, y, w, h, mold); s.rect(x, y, w, .5, luz); s.rect(x + w - .5, y + .5, .5, h - .5, sb); s.rect(x, y + h - 1, w, .5, luz); s.rect(x, y + h - .5, w, .5, sb);
+    s.rect(gx, gy, gw, gh, T.mus[1]); s.rect(gx, gy, gw, .5, T.mus[0]);
+    if (gw >= 6) { s.rect(gx + Math.floor(gw) / 2 - .25, gy, .5, gh, mold); s.rect(gx, gy + Math.round(gh * .9) / 2, gw, .5, mold); } // janela pequena fica sem travessa
+    for (let k = 0; k < 3; k++) s.dot(gx + .5 + k * .5, gy + 2 - k * .5, T.fish[2]);
+  };
+  // Porta: batente no tom de sombra, folha chapada com luz na aresta esquerda, duas almofadas rebaixadas (sombra em cima e à esquerda,
+  // luz embaixo) e maçaneta.
+  const porta = (s, x, y, w, h, c = T.wood) => {
+    s.rect(x, y, w, h, c[0]); s.rect(x + 1, y + 1, w - 2, h - 1, c[1]); s.rect(x + 1, y + 1, .5, h - 1, c[2]);
+    const a = Math.round((h - 4) * .9) / 2;
+    [[y + 2, a], [y + 3 + a, h - 4 - a]].forEach(([py, ph]) => { if (ph < 1.5) return; s.rect(x + 2, py, w - 4, .5, c[0]); s.rect(x + 2, py, .5, ph, c[0]); s.rect(x + 2.5, py + ph - .5, w - 4.5, .5, c[2]); });
+    s.dot(x + w - 2, y + Math.round(h * 1.1) / 2, T.yel[2]); s.dot(x + w - 2, y + Math.round(h * 1.1) / 2 + .5, T.yel[0]);
+  };
+  // Manchas do reboco: poucos traços de 2 a 3 px finos, meio-tom abaixo, em posição fixa por semente e só sobre a cor de base.
+  // A face continua chapada; nada de pontos soltos.
+  const granula = (s, x, y, w, h, c, k = 0, dens = .08) => {
+    for (let i = 0, n = Math.round(w * h * dens * .25); i < n; i++) {
+      const px = x + Math.floor(hash(i, k, 81) * (w - 2) * 2) / 2, py = y + Math.floor(hash(i, k, 82) * h * 2) / 2, len = hash(i, k, 83) < .5 ? 1 : 1.5;
+      if (s.get(px, py) === c && s.get(px + len - .5, py) === c) s.rect(px, py, len, .5, tom(c, -.5));
+    }
+  };
+  // Toldo (regra 10.14): faixas de 4 alternando o creme e a cor; ripa de luz em cima, aresta de luz na dobra, barra em festão meio-tom
+  // abaixo com o último pixel de cada coluna escurecido. Antes de pintar, a sombra do toldo cai sobre o que está atrás.
+  const toldo = (s, x0, y0, w, prof, cor) => {
+    escurece(s, x0 + .5, y0 + prof + 1, w - 1, 3);
+    for (let i = 0; i < w; i += .5) {
+      const st = Math.floor(i / 4) % 2 ? cor : T.crm, u = i % 4, bh = u < .5 || u >= 3.5 ? 1 : u < 1 || u >= 3 ? 1.5 : 2, x = x0 + i;
+      s.rect(x, y0, .5, prof, st[1]); s.dot(x, y0, st[2]); s.dot(x, y0 + prof, st[2]);
+      s.rect(x, y0 + prof + .5, .5, bh, tom(st[1], -.5)); s.dot(x, y0 + prof + bh, st[0]);
+    }
+  };
+  const tela = (w, h) => { const c = document.createElement('canvas'); c.width = w * HD; c.height = h * HD; c._r = HD; c.lw = w; c.lh = h; return c; };
   const spr24 = f => { const s = new Spr(24, 24); f(s); return s.outline().canvas(); };
 
   // Mantimentos (cadeias) e ferramentas (transversais), pelo código do catálogo: [nome do objeto desenhado, desenho 48x48].
   // Código novo cai no ícone genérico (_). Os objetos das áreas transversais são os mesmos acessórios que aparecem na canoa.
-  const spr48 = f => { const s = new Spr(48, 48); f(s); return s.outline().canvas(); };
+  const spr48 = f => { const s = new Spr(48, 48, 1); f(s); return s.outline().canvas(); };
   const VERDE_CLARO = [T.grn[1], T.grn[2], '#c4e88a'];
   const folha = (s, x, y, rx, ry, a, t = T.grn) => { const c = Math.cos(a) * rx * .8, n = Math.sin(a) * rx * .8; s.rEll(x, y, rx, ry, a, t); s.line(x - c, y - n, x + c, y + n, t[0]); };
   const peixe = (s, x, y, rx, ry, a, t) => { // cabeça no sentido do ângulo, rabo e barbatana atrás
@@ -761,60 +1014,83 @@ window.RIO = (function () {
     if (!iconeCache[k]) iconeCache[k] = spr48(desenhoDe(item)[1]);
     return iconeCache[k];
   }
-  function crewSpr(skin, shirt) { // extensionista sentado, de frente: chapéu de palha, rosto, camisa
-    const s = new Spr(12, 13);
-    s.rect(3, 7, 6, 5, shirt[1]); s.rect(3, 7, 1, 5, shirt[2]); s.rect(8, 7, 1, 5, shirt[0]); s.rect(5, 7, 2, 1, skin[0]);
-    s.rect(2, 8, 1, 3, shirt[1]); s.rect(9, 8, 1, 3, shirt[0]); s.set(2, 11, skin[1]); s.set(9, 11, skin[1]);
-    s.rect(4, 4, 4, 3, skin[1]); s.rect(4, 4, 4, 1, skin[0]); s.set(5, 5, OL); s.set(7, 5, OL);
-    s.rect(1, 3, 10, 1, T.yel[1]); s.rect(2, 3, 4, 1, T.yel[2]); s.set(10, 3, T.yel[0]);
-    s.rect(4, 0, 4, 3, T.yel[1]); s.rect(4, 0, 2, 2, T.yel[2]); s.set(7, 1, T.yel[0]); s.rect(4, 2, 4, 1, T.red[1]);
-    return s.outline();
+  // ---------- pessoas pequenas, 12x18 (regra 9): silhueta primeiro, dois tons por material, três só no chapéu ----------
+  // O lado direito da tela fica na sombra em todos os quadros e nas duas vistas (braço e perna direitos no tom de sombra):
+  // a mancha não troca de lado quando as pernas alternam. Contorno comum só por fora, nada sob os pés.
+  // Poses das pernas: 0 parado; 1 e 2 contato (pé esquerdo ou direito no chão à frente); 3 e 4 passagem, depois de 1 e de 2
+  // (a perna de trás sobe e passa). O ciclo de quem anda é ANDAR; o de EMPURRA é EMPURRA_PASSO.
+  const JEANS = [T.mus[1], T.blu[0]], BOTA = [T.brn[0], T.brn[1]]; // [sombra, base]; a calça escura não empata com a grama
+  const UNIFORME = [T.dgrn, trio(tom(T.grn[1], -.5))]; // camisas da equipe: verdes mais escuros que a grama e que a areia
+  const PES = [[18, 18], [18, 17], [17, 18], [18, 16], [16, 18]], ANDAR = [1, 3, 2, 4], EMPURRA_PASSO = [0, 3, 1, 4];
+  /** o = { skin, roupa, cabelo, chapeu, costas, saia, pose, esq, dir, curvado }; esq e dir: 'cima' (braço erguido) ou 'empurra'. Devolve o Spr já com contorno. */
+  function pessoa(o) {
+    const s = new Spr(12, 18), { skin, roupa, chapeu, costas, saia } = o, cabelo = o.cabelo || T.brn[0], pose = o.pose || 0, cy = o.curvado ? 2.5 : 0; // curvado: cabeça baixa de quem empurra
+    const perna = saia ? skin : JEANS, y0 = saia ? 14.5 : 13; s.liso = true; // boneco posto pixel a pixel: sem alisar (regra 9.13)
+    [[3, 1], [6.5, 0]].forEach(([x, k]) => { const fim = PES[pose][1 - k]; s.rect(x, y0, 2, fim - 1 - y0, perna[k]); s.rect(x, fim - 1, 2, 1, BOTA[k]); }); // vão de 1,5 entre as pernas: o contorno não fecha
+    s.rect(3, 7, 6, 6, roupa[1]); s.rect(8.5, 7, .5, 6, roupa[0]); s.rect(4, 7, 4.5, .5, roupa[0]); // tronco; sombra da cabeça nos ombros, mais longa à direita
+    if (saia) { s.rect(2.5, 11.5, 7, 3, roupa[1]); s.rect(8.5, 11.5, 1, 3, roupa[0]); s.rect(5.5, 12.5, .5, 2, roupa[0]); } // uma dobra só
+    else s.rect(3, 12.5, 6, .5, BOTA[0]); // cinto: camisa e calça podem ter o mesmo valor
+    const braco = (modo, k, x, xc, xe, recua) => { // k: 1 base (esquerdo), 0 sombra (direito); x pendente, xc erguido, xe esticado à frente
+      if (modo === 'empurra') { s.rect(xe, 2, 2, 6, roupa[k]); s.rect(xe, .5, 2, 1.5, skin[k]); }
+      else if (modo === 'cima') { const ym = chapeu ? .5 : 2.5; s.rect(x, 7, 1, 1.5, roupa[k]); s.rect(xc, ym + 1.5, 1.5, 7 - ym, roupa[k]); s.rect(xc, ym, 1.5, 1.5, skin[k]); } // a mão passa da aba do chapéu
+      else { const h = recua ? 3.5 : 4; s.rect(x, 8, 1, h, roupa[k]); s.rect(x, 8 + h, 1, 1, skin[k]); }
+    };
+    braco(o.esq, 1, 2, 1, 2, pose === 1); braco(o.dir, 0, 9, 9.5, 8, pose === 2);
+    if (!o.esq) s.rect(3, 8.5, .5, 3.5, roupa[0]); // linha da axila: à esquerda braço e tronco têm o mesmo tom
+    if (!costas) rosto(s, 4, 3 + cy, skin, 4, chapeu ? 1.5 : 2, 1.5); // a aba ou a franja cobre meio pixel; sobra uma linha de sombra acima dos olhos
+    else if (o.curvado) s.rect(4, 3 + cy, 4, 1.5, cabelo);
+    else { s.rect(4, 3, 4, 3.5, cabelo); s.rect(4.5, 6.5, 3, .5, skin[0]); } // nuca na sombra da cabeça
+    if (chapeu) chapeuPalha(s, 1, cy);
+    else {
+      s.rect(3.5, 2, 5, 2, cabelo); s.rect(4, 2, 2, .5, tom(cabelo, 1.5)); // a franja cobre a linha de cima do rosto
+      if (saia) { if (costas) s.rect(3, 3, 6, 5.5, cabelo); else { s.rect(3, 3, 1, 5.5, cabelo); s.rect(8, 3, 1, 5.5, cabelo); } } // cabelo comprido
+    }
+    return s.outline('comum');
   }
-  const CREW = [0, 1, 2, 3].map(i => crewSpr(SKINS[i], i % 2 ? T.grn : T.dgrn));
+  const crewSpr = (skin, shirt) => pessoa({ skin, roupa: shirt, chapeu: true }); // extensionista de pé, de frente
+  const CREW = [0, 1, 2, 3].map(i => crewSpr(SKINS[i], UNIFORME[i % 2]));
   const CREW_C = CREW.map(c => c.canvas());
-  // Extensionista de costas, empurrando (quadros 0 e 1: passos) ou acenando da beira (quadro 2).
+  // Extensionista de costas. Quadros 0 e 1: contato, empurrando de braços esticados; 2: acenando da beira; 3 e 4: passagem, depois de 0 e de 1.
   function empurrador(skin, shirt, q) {
-    const s = new Spr(12, 18);
-    if (q < 2) { s.rect(2, 0, 2, 7, skin[1]); s.rect(8, 0, 2, 7, skin[1]); s.rect(2, 4, 2, 3, shirt[1]); s.rect(8, 4, 2, 3, shirt[1]); }
-    else { s.rect(9, 0, 2, 7, skin[1]); s.rect(9, 4, 2, 3, shirt[1]); s.set(11, 0, skin[1]); s.rect(1, 8, 2, 4, shirt[1]); s.rect(1, 12, 2, 1, skin[1]); }
-    s.rect(3, 7, 6, 6, shirt[1]); s.rect(3, 7, 1, 6, shirt[2]); s.rect(8, 7, 1, 6, shirt[0]);
-    const pe = q === 1 ? [4, 3] : q === 0 ? [3, 4] : [4, 4];
-    s.rect(3, 13, 2, pe[0], T.blu[0]); s.rect(7, 13, 2, pe[1], T.blu[0]); s.rect(3, 12 + pe[0], 2, 1, T.brn[0]); s.rect(7, 12 + pe[1], 2, 1, T.brn[0]);
-    s.rect(5, 6, 2, 1, skin[0]); s.rect(1, 5, 10, 1, T.yel[1]); s.rect(2, 5, 4, 1, T.yel[2]); s.set(10, 5, T.yel[0]);
-    s.rect(4, 2, 4, 3, T.yel[1]); s.rect(4, 2, 2, 2, T.yel[2]); s.rect(4, 4, 4, 1, T.red[1]);
-    return s.outline().canvas();
+    const base = { skin, roupa: shirt, chapeu: true, costas: true };
+    return pessoa(q === 2 ? { ...base, dir: 'cima' } : { ...base, curvado: true, esq: 'empurra', dir: 'empurra', pose: [2, 1, 0, 4, 3][q] }).canvas();
   }
-  const EMPURRA = [0, 1, 2].map(q => [0, 1, 2].map(i => empurrador(SKINS[i], i % 2 ? T.grn : T.dgrn, q)));
+  const EMPURRA = [0, 1, 2, 3, 4].map(q => [0, 1, 2].map(i => empurrador(SKINS[i], UNIFORME[i % 2], q)));
 
   // ---------- embarcação vista de cima, em 3/4 ----------
   const BW = 128, BH = 96, CY = 66;
-  const HULL = [{ L: 60, hw: 6, d: 4 }, { L: 66, hw: 7, d: 5 }, { L: 76, hw: 8, d: 5 }, { L: 86, hw: 9, d: 6, band: T.red[1] }, { L: 100, hw: 11, d: 7, band: T.blu[1] }];
+  const HULL = [{ L: 60, hw: 6, d: 4 }, { L: 66, hw: 7, d: 5 }, { L: 76, hw: 8, d: 5 }, { L: 86, hw: 9, d: 6, band: T.red[1] }, { L: 100, hw: 11, d: 7, band: T.crm[1] }]; // friso fora da família da água: azul sumia no rio
   function geo(stage) {
     const h = HULL[stage], x0 = Math.round((BW - h.L) / 2);
     const at = f => Math.round(x0 + h.L * f), half = f => { const u = f * 2 - 1; return h.hw * Math.pow(Math.max(0, 1 - u * u), .55); };
     return { h, x0, at, half, mx: at(stage === 4 ? .56 : .4), bow: x0 + h.L - 5 };
   }
+  // Casco em madeira escura (regra 10.16): luz só nas duas bordas, sombra da borda de lá sobre o convés, tábuas com junta a cada 3 e
+  // costado em base e sombra. O convés fica no tom claro da madeira escura para as pernas da tripulação não sumirem.
+  // Em sub vai o que só existe na água (regra 5.9): linha clara na linha d'água, água escura logo abaixo e o reflexo do casco em tiras.
   function hull(s, sub, g) {
-    const h = g.h, TAB = ['#6e4a30', '#7c5638'];
-    for (let i = 0; i < h.L; i++) {
+    const h = g.h, m = v => Math.round(v * 2) / 2;
+    for (let i = 0; i < h.L; i += .5) {
       const u = i / (h.L - 1) * 2 - 1, k = Math.max(0, 1 - u * u), w = h.hw * Math.pow(k, .55);
-      const up = Math.round(CY - w), lo = Math.round(CY + w), sb = Math.round(lo + h.d * Math.pow(k, .5)), x = g.x0 + i, ponta = i < 3 || i > h.L - 4;
-      for (let y = up + 1; y < lo; y++) { // convés: sombra da borda de lá, tábuas com emendas desencontradas e cavernas
-        const f = y - up, fi = Math.floor(f / 3);
-        s.set(x, y, f <= 2 ? T.wood[f - 1] : (i % 12 == 6 || f % 3 == 0 || (i + fi * 5) % 14 == 0) ? T.brn[0] : TAB[fi % 2]);
-      }
-      s.set(x, up, i % 2 ? T.wood[2] : '#d49a62'); s.set(x, lo, T.wood[2]);
-      for (let y = lo + 1; y <= sb; y++) {
-        const f = y - lo;
-        s.set(x, y, ponta ? T.wood[0] : h.band && f >= 2 && f <= 3 && sb >= lo + 4 ? h.band : f == 1 ? (i % 6 == 3 ? T.wood[0] : T.wood[1]) : T.wood[0]);
-        if (y > lo + (sb - lo) * .5) sub.set(x, y, '#2f6fa0');
-      }
-      if (sb > lo + 1 && i % 3 == 0) sub.set(x, Math.round(lo + (sb - lo) * .5), '#cfeeff');
+      const up = m(CY - w), lo = m(CY + w), sb = m(lo + h.d * Math.pow(k, .5)), x = g.x0 + i, ms = m(lo + 1 + (sb - lo) * .55);
+      for (let y = up + 1; y < lo; y += .5) { const f = y - up; s.dot(x, y, f < 2 ? T.brn[0] : (y - CY + 30) % 3 >= 2.5 ? T.brn[1] : T.brn[2]); } // juntas retas, ao longo do casco
+      s.dot(x, up, T.wood[2]); s.dot(x, up + .5, T.wood[1]); s.dot(x, lo, T.wood[2]); s.dot(x, lo + .5, T.wood[1]);
+      for (let y = lo + 1; y <= sb + .5; y += .5) { const f = y - lo; s.dot(x, y, h.band && f >= 2 && f < 3.5 && sb >= lo + 4 ? h.band : y >= ms || i > h.L - 4 ? T.brn[0] : T.brn[1]); }
+      const wl = Math.min(m(lo + 1 + (sb - lo) * .7), sb + .5), fim = sb + 1 + (sb - up) * .45;
+      sub.dot(x, wl, AG[5]); for (let y = wl + .5; y <= sb + 1; y += .5) sub.dot(x, y, AG[0]);
+      for (let y = sb + 1.5; y <= fim; y += .5) { const j = Math.round(y * 2); if (j % 3 < 2) sub.dot(x + (Math.floor(j / 3) % 2 ? 1 : -1), y, AG[0]); }
     }
-    const bx = g.x0 + h.L - 2; s.rect(bx, CY - 2, 2, 4, T.wood[1]); s.set(bx, CY - 2, T.wood[2]); s.rect(g.x0, CY - 1, 2, 3, T.wood[1]);
+    const bx = g.x0 + h.L - 2; s.rect(bx, CY - 2, 2, 4, T.wood[1]); s.rect(bx, CY - 2, 2, .5, T.wood[2]); s.rect(bx + 1.5, CY - 1.5, .5, 3.5, T.wood[0]); s.rect(g.x0, CY - 1, 2, 3, T.wood[1]); s.rect(g.x0, CY - 1, 2, .5, T.wood[2]);
   }
-  const box3 = (s, x, y, w, d, hg, top, front) => { s.rect(x, y, w, d, top[2]); s.rect(x + 1, y + 1, w - 2, d - 1, top[1]); s.rect(x, y + d, w, hg, front[0]); s.rect(x, y + d, w, 1, front[1]); };
-  const painelSolar = (s, x, y, w, d) => { s.rect(x, y, w, d, T.mtl[0]); for (let i = x + 1; i < x + w - 1; i += 3) for (let j = y + 1; j < y + d - 1; j += 2) s.set(i, j, T.blu[2]), s.set(i + 1, j, T.blu[1]); };
+  // Caixa em 3/4 (regra 10.10): tampo na luz, frente na base, 1 px fino do tom mais claro na aresta entre os dois, sombra à direita e na base.
+  const box3 = (s, x, y, w, d, hg, top, front) => { s.rect(x, y, w, d, top[2]); s.rect(x, y + d, w, hg, front[1]); s.rect(x, y + d, w, .5, tom(top[2], 1)); s.rect(x + w - 1, y + d + .5, 1, hg - .5, front[0]); s.rect(x, y + d + hg - .5, w, .5, front[0]); };
+  // Painel solar: moldura de metal com luz na borda de cima, placa azul escura chapada e a grade das células em linhas finas.
+  const painelSolar = (s, x, y, w, d) => {
+    s.rect(x, y, w, d, T.mtl[0]); s.rect(x + .5, y + .5, w - 1, d - 1, T.blu[0]);
+    for (let i = x + 3; i < x + w - 1; i += 3) s.rect(i, y + .5, .5, d - 1, T.mus[1]);
+    for (let j = y + 2; j < y + d - .5; j += 2) s.rect(x + .5, j, w - 1, .5, T.mus[1]);
+    s.rect(x, y, w, .5, T.mtl[2]);
+  };
 
   // ---------- ferramentas dos parceiros: 14x14, cabo de cima para baixo, encostadas no costado da canoa ----------
   const anel = (s, cx, cy, r, ri, cor) => { for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) { const d = Math.hypot(x - cx, y - cy); if (d <= r + .3 && d >= ri) s.set(x, y, cor(x - cx, y - cy)); } };
@@ -840,13 +1116,38 @@ window.RIO = (function () {
   const iconeFerramenta = cod => { const k = simboloParceiro(cod); return iconesFer[k] = iconesFer[k] || ferramenta(k).outline().canvas(); };
 
   // spec: { stage, trans: [códigos], carga, equipe, cores: [cores do público], mapa, parceiros: [ferramentas] }
+  // Panos ao vento. Quadro 0 parado (reto); de 1 a 3, uma onda de 1 px fino corre da haste para a ponta. O lado preso à haste não
+  // sobe nem desce e fica sem contorno, porque encosta nela.
+  const solto = s => { const X = s.fw - 1, Y = s.fh - 1; s.f(X, Y, OL); s.outline(); [[X, Y], [X - 1, Y], [X, Y - 1]].forEach(([a, b]) => s.f(a, b, null)); return s; }; // contorno também por baixo: um pixel de apoio no canto, que sai depois
+  const onda = (i, q) => q && i ? Math.round(Math.sin(i * 1.1 - q * 2.1)) * .5 : 0;
+  const pano = (w, h, pinta) => [0, 1, 2, 3].map(q => { const s = new Spr(w + 2, h + 3); for (let i = 0; i < w; i++) pinta(s, i, 1 + onda(i, q)); return solto(s).canvas(); });
+  let bandeiraPr = null; const flamulas = {};
+  const BANDEIRA_PR = () => bandeiraPr || (bandeiraPr = pano(7, 5, (s, i, y) => { s.rect(i, y, 1, 5, T.grn[1]); if (i >= 1 && i <= 5) s.rect(i, y + 5 - i, 1, 1, i === 3 ? T.blu[1] : T.wht[2]); })); // verde com a faixa branca em diagonal
+  const FLAMULA = cor => flamulas[cor] || (flamulas[cor] = pano(7, 3, (s, i, y) => s.rect(i, y, 1, 3, cor))); // a do alto do mastro
+  // Tripulação de pé: da cintura para baixo vai no desenho fixo do barco; a parte de cima é posta a cada quadro e pode descer 1 px fino (respiração).
+  const CORTE = 10.5, CREW_PE = CREW.map(c => { const n = new Spr(12, 18 - CORTE); n.p = c.p.slice(CORTE * HD * c.fw); return n; });
+  // As camadas vivas de um barco, por cima do desenho fixo e na ordem em que eram pintadas: vela, bandeiras, tripulação e bandeirolas.
+  // viva = false dá o quadro 0 de tudo (barco parado, inteiro).
+  const ciclo = (v, n) => ((Math.floor(v) % n) + n) % n; // índice de quadro, nunca negativo
+  function camadas(ctx, b, x, top, t, viva) {
+    if (viva && b.vela) ctx.drawImage(b.vela.q[ciclo(t * 1.5 + b.fase * 3, 3)], x + b.vela.x, top + b.vela.y);
+    const bate = viva ? 1 + ciclo(t * 7 + b.fase * 3, 3) : 0;
+    b.panos.forEach(p => ctx.drawImage(p.q[bate], x + p.x, top + p.y));
+    b.eq.forEach((e, i) => {
+      const f = b.fase + e.x * .37 + i * .61, dy = viva && Math.sin(t * 1.7 + f * 6.3) > .2 ? .5 : 0, ex = x + e.x, ey = top + CY - 15 + dy;
+      ctx.drawImage(CREW_C[e.k], 0, 0, 12, CORTE, ex, ey, 12, CORTE);
+      if (viva && (t * .27 + f) % 1 < .035) { const sk = SKINS[e.k]; ctx.fillStyle = sk[1]; ctx.fillRect(ex + 5, ey + 4.5, .5, .5); ctx.fillRect(ex + 6.5, ey + 4.5, .5, .5); ctx.fillStyle = sk[0]; ctx.fillRect(ex + 5, ey + 5, .5, .5); ctx.fillRect(ex + 6.5, ey + 5, .5, .5); } // pisca: pálpebra no tom de sombra da pele
+    });
+    if (b.band) ctx.drawImage(b.band.q[bate], x + b.band.x, top + b.band.y);
+  }
   const barcos = {};
   function barco(spec) {
     const chave = JSON.stringify(spec);
     if (barcos[chave]) return barcos[chave];
     const st = spec.stage, s = new Spr(BW, BH), sub = new Spr(BW, BH), g = geo(st), h = g.h, tem = c => spec.trans.indexOf(c) >= 0;
     hull(s, sub, g);
-    const seat = f => { const x = g.at(f), w = g.half(f); s.rect(x, Math.round(CY - w) + 1, 3, Math.round(2 * w) - 1, T.wood[2]); s.rect(x, Math.round(CY + w) - 1, 3, 1, T.wood[0]); };
+    const haste = (x, y, alt) => { s.rect(x, y, 1, alt, T.brn[1]); s.dot(x, y, T.wood[2]); }; // poste: linha escura com um pixel de luz no topo
+    const seat = f => { const x = g.at(f), w = g.half(f), y = Math.round(CY - w) + 2, alt = Math.round(2 * w) - 2; s.rect(x, y, 3, alt, T.wood[1]); s.rect(x, y, .5, alt, T.wood[2]); s.rect(x + 3, y, .5, alt, T.brn[1]); };
     if (st >= 1) seat(.5);
     if (st >= 2) seat(.36);
     { const x = g.at(.9); s.ell(x, CY + 2, 2, 1.5, T.jute[1]); s.set(x, CY + 2, T.brn[0]); s.set(x - 1, CY + 1, T.jute[2]); } // rolo de corda na proa
@@ -856,44 +1157,54 @@ window.RIO = (function () {
     if (tem('10010')) { const x = g.at(.86), y = Math.round(CY + g.half(.86)) + 3; s.ell(x, y, 2.2, 2.2, T.red[1]); s.set(x, y - 2, T.wht[2]); s.set(x, y + 2, T.wht[2]); s.set(x, y, T.wood[0]); }
     if (st === 2 || st === 3) { // toldo listrado sobre postes; painel solar no teto, se houver
       const a = g.at(st === 3 ? .6 : .5), b = g.at(st === 3 ? .84 : .8), Hh = 10, hw = Math.round(g.half((a - g.x0 + (b - a) / 2) / h.L));
-      [a, b].forEach(px => s.rect(px, CY + hw - Hh, 1, Hh, T.wood[0])); tapado.push([a, b]);
-      for (let x = a; x <= b; x++) { // lona com dobra no meio e barra recortada
-        const c = ((x - a) >> 2) % 2 ? [T.red[1], T.red[0], T.red[2]] : [T.crm[2], T.crm[0], '#ffffff'], m = (x - a) & 3;
-        s.rect(x, CY - hw - Hh, 1, 2 * hw, c[0]); s.set(x, CY - hw - Hh, c[2]); s.set(x, CY - Hh, c[1]); s.rect(x, CY + hw - Hh, 1, 2, c[1]); if (m == 1 || m == 2) s.set(x, CY + hw - Hh + 2, c[1]);
-      }
+      [a, b].forEach(px => s.rect(px, CY + hw - Hh, 1, Hh, T.brn[1])); tapado.push([a, b]);
+      toldo(s, a, CY - hw - Hh, b - a + 1, 2 * hw, T.red);
       if (tem('15200')) painelSolar(s, a + 3, CY - hw - Hh + 2, b - a - 5, 2 * hw - 4);
     } else if (st < 2 && tem('15200')) { const x = g.at(.66); tapado.push([x - 1, x + 9]); s.rect(x, CY - 6, 1, 6, T.mtl[0]); s.rect(x + 7, CY - 6, 1, 6, T.mtl[0]); painelSolar(s, x - 1, CY - 10, 10, 5); }
+    const panos = []; // bandeiras ao vento: ficam fora do desenho fixo, cada uma com os seus quadros
     const poste = spec.cores.length || st >= 2 || tem('14950') || tem('10002');
-    if (poste) { const px = g.bow - 2; s.rect(px, CY - 13, 1, 13, T.wood[0]); s.rect(px, CY - 14, 4, 1, T.wood[0]); if (st >= 2) s.sRect(px + 2, CY - 13, 3, 4, T.yel); }
-    if (tem('14950')) { const x = g.bow - 8; tapado.push([x - 2, x + 2]); s.rect(x, CY - 8, 1, 8, T.wood[0]); s.rect(x - 2, CY - 9, 5, 1, T.wood[0]); s.sEll(x, CY - 10, 2, 2.5, T.yel); }
+    if (poste) { const px = g.bow - 2; haste(px, CY - 14, 14); s.rect(px + 1, CY - 14, 3, 1, T.brn[1]); if (st >= 2) { s.rect(px + 2, CY - 13, 3, 4, T.yel[1]); s.rect(px + 2, CY - 13, 3, .5, T.yel[2]); s.rect(px + 2, CY - 9.5, 3, .5, T.yel[0]); } }
+    if (tem('14950')) { const x = g.bow - 8; tapado.push([x - 2, x + 2]); haste(x, CY - 9, 9); s.rect(x - 2, CY - 9, 5, 1, T.brn[1]); s.sEll(x, CY - 10, 2, 2.5, T.yel); }
     if (tem('10002')) { const x = g.bow + 1; for (let i = 0; i < 6; i++) s.rect(x + i, CY - 4 - Math.floor(i / 2), 1, 1 + Math.floor(i / 2) * 2, i > 3 ? T.yel[2] : T.yel[1]); }
-    if (tem('15406') || (spec.cores.length && st < 3)) { const x = g.x0 + 5; s.rect(x, CY - 18, 1, 18, T.wood[0]); if (tem('15406')) { s.rect(x + 1, CY - 18, 7, 5, T.grn[1]); s.line(x + 2, CY - 14, x + 6, CY - 18, T.wht[2]); s.set(x + 4, CY - 16, T.blu[1]); } }
+    if (tem('15406') || (spec.cores.length && st < 3)) { const x = g.x0 + 5; haste(x, CY - 18, 18); if (tem('15406')) panos.push({ x: x + 1, y: CY - 19, q: BANDEIRA_PR() }); }
     if (tem('10020')) { const x = st === 4 ? g.at(.43) : g.at(.14), y = CY - 7; tapado.push([x - 4, x + 4]); s.rect(x, y, 1, 7, T.wood[0]); for (let a = 0; a < 6.3; a += .4) s.set(x + Math.cos(a) * 4, y + Math.sin(a) * 4, T.wood[1]); s.line(x - 4, y, x + 4, y, T.wood[0]); s.line(x, y - 4, x, y + 4, T.wood[0]); s.set(x, y, T.yel[2]); }
-    let topoMastro = null;
-    if (st === 4) { // cabine na popa
+    let topoMastro = null, vela = null;
+    if (st === 4) { // cabine na popa: caixa em 3/4, telhado de telha em cima, frente de tábuas com a sombra do beiral, sombra no convés à direita
       const cx = g.at(.1), cw = 28, Hh = 11, hw = h.hw - 3; tapado.push([cx - 1, cx + cw]);
-      s.rect(cx - 1, CY - hw - Hh - 1, cw + 2, 2 * hw + 1, T.red[2]); s.rect(cx, CY - hw - Hh, cw, 2 * hw, T.red[1]);
-      for (let y = CY - hw - Hh + 2, k = 0; y < CY + hw - Hh; y += 3, k++) { s.rect(cx, y, cw, 1, T.red[0]); for (let x = cx + 1 + (k % 2) * 2; x < cx + cw; x += 4) s.set(x, y - 1, T.red[0]); } // telhas
+      escurece(s, cx + cw + 1, CY - hw + 2, 2, 2 * hw - 2);
+      s.rect(cx - 1, CY - hw - Hh - 1, cw + 2, 2 * hw + 1, T.red[1]); telhas(s, cx, CY - hw - Hh, cw, 2 * hw, T.red);
       if (tem('15200')) painelSolar(s, cx + 3, CY - hw - Hh + 2, cw - 6, 2 * hw - 4);
       const py = CY + hw - Hh;
-      s.sRect(cx, py, cw, Hh, T.wood); for (let x = cx + 2; x < cx + cw - 1; x += 4) s.rect(x, py + 1, 1, Hh - 2, T.wood[0]);
-      [cx + 4, cx + cw - 9].forEach(x => { s.rect(x - 1, py + 2, 7, 6, T.crm[2]); s.rect(x, py + 3, 5, 4, T.blu[2]); s.rect(x, py + 5, 5, 2, T.blu[1]); s.set(x + 1, py + 3, '#ffffff'); });
-      s.rect(cx + 11, py + 3, 6, Hh - 3, T.brn[0]); s.rect(cx + 12, py + 4, 4, Hh - 4, T.brn[1]); s.set(cx + 15, py + 7, T.yel[2]);
+      s.rect(cx, py, cw, Hh, T.wood[1]); for (let x = cx + 4; x < cx + cw - 2; x += 4) s.rect(x, py, .5, Hh, T.wood[0]);
+      s.rect(cx, py, .5, Hh, T.wood[2]); s.rect(cx + cw - 2, py, 2, Hh, T.wood[0]); s.rect(cx, py, cw, 1.5, T.wood[0]); s.rect(cx, py + Hh - .5, cw, .5, T.wood[0]);
+      [cx + 4, cx + cw - 9].forEach(x => janela(s, x - 1, py + 2, 7, 6, T.crm[1]));
+      porta(s, cx + 11, py + 3, 6, Hh - 3, T.brn);
     }
-    if (st >= 3) { // mastro e vela em pé
-      const top = CY - (st === 4 ? 56 : 46), sw = st === 4 ? 32 : 26; topoMastro = [g.mx + 1, top];
-      s.rect(g.mx, top, 2, CY - top, T.wood[1]); s.rect(g.mx + 2, top - 2, 7, 3, st === 4 ? T.yel[1] : T.red[1]);
-      for (let y = top + 3; y < CY - 9; y++) { // vela com costuras e a retranca embaixo
-        const w = Math.round((y - top - 3) / (CY - top - 12) * sw);
-        for (let i = 0; i < w; i++) s.set(g.mx + 2 + i, y, (i < 3 || (y - top) % 8 == 2) ? T.crm[0] : i > w - 3 ? T.crm[2] : T.crm[1]);
-      }
-      s.rect(g.mx + 2, CY - 9, sw + 2, 1, T.wood[0]); s.set(g.mx, top, T.wood[2]);
+    if (st >= 3) { // mastro (linha escura com luz no topo) e vela de pano creme: uma faixa larga de sombra fria do lado oposto à luz e três costuras finas
+      const top = CY - (st === 4 ? 56 : 46), sw = st === 4 ? 32 : 26, alt = CY - top - 12; topoMastro = [g.mx + 1, top];
+      s.rect(g.mx, top, 2, CY - top, T.brn[1]); s.rect(g.mx + 1.5, top, .5, CY - top, T.brn[0]); panos.push({ x: g.mx + 2, y: top - 3, q: FLAMULA(st === 4 ? T.yel[1] : T.red[1]) });
+      // q = 0 é a vela parada; de 1 a 3 a divisa da sombra e as costuras ondulam 1 px fino (a silhueta e o lado da sombra não mudam)
+      const panoVela = (S, q, ox, oy) => {
+        for (let y = top + 3; y < CY - 9; y += .5) {
+          const d = y - top - 3, w = d / alt * sw, div = w * .62 + (q ? Math.round(Math.sin(d * .3 + q * 2.1)) * .5 : 0);
+          for (let i = 0; i < w; i += .5) {
+            const dc = d - (q && Math.sin(i * .45 + q * 2.1) > .3 ? .5 : 0), costura = [.3, .55, .8].some(f => Math.abs(dc - Math.round(alt * f)) < .25), fria = i > div;
+            S.dot(g.mx + 2 + i - ox, y - oy, costura ? (fria ? T.gry[1] : T.crm[0]) : fria ? T.wht[0] : T.crm[1]);
+          }
+        }
+        return S;
+      };
+      panoVela(s, 0, 0, 0);
+      vela = { x: g.mx + 2, y: top + 3, q: [1, 2, 3].map(q => panoVela(new Spr(sw + 1, alt + 1), q, g.mx + 2, top + 3).canvas()) };
+      s.rect(g.mx + 2, CY - 9, sw + 2, 1, T.brn[1]); s.rect(g.mx, top, 2, .5, T.wood[2]);
     }
     // Tripulação por cima de cabine, toldo e vela, e só em convés livre: ninguém fica escondido.
     const livres = [];
     for (let x = g.x0 + 12; x <= g.bow - 9;) { if (tapado.some(([p, q]) => x + 5 >= p && x - 5 <= q)) x++; else { livres.push(x); x += 10; } }
     const nEq = Math.min(spec.equipe, livres.length);
-    for (let i = 0; i < nEq; i++) s.blit(CREW[i % 4], livres[nEq === 1 ? livres.length >> 1 : Math.round(i * (livres.length - 1) / (nEq - 1))] - 6, CY - 10);
+    // De pé no convés, de corpo inteiro. No desenho fixo fica só da cintura para baixo; a parte de cima é posta a cada quadro (respira e pisca).
+    const eq = [];
+    for (let i = 0; i < nEq; i++) { const x = livres[nEq === 1 ? livres.length >> 1 : Math.round(i * (livres.length - 1) / (nEq - 1))] - 6; s.blit(CREW_PE[i % 4], x, CY - 15 + CORTE); eq.push({ k: i % 4, x }); }
     // mapa e acessórios pequenos ficam na frente da tripulação, junto à borda de cá
     if (spec.mapa) { const x = g.at(.3); s.sRect(x - 3, CY + 1, 6, 3, T.crm); s.set(x - 1, CY + 2, T.red[1]); }
     if (tem('12100')) { const x = g.at(.47); box3(s, x - 3, CY, 7, 2, 3, T.wood, T.wood); s.set(x, CY + 2, T.yel[2]); }
@@ -907,95 +1218,220 @@ window.RIO = (function () {
       for (let i = 0; i < n; i++) { const f = n === 1 ? .5 : .1 + .8 * i / (n - 1), x = g.at(f); fs.blit(ferramenta(spec.parceiros[i]), x - 7, Math.round(CY + g.half(f)) - 3 + (i % 2) * 2); }
       fer = fs.outline().canvas();
     }
-    if (spec.cores.length) { // bandeirolas: uma por público
-      const [ax, ay] = topoMastro || [g.x0 + 5, CY - 18], bx = g.bow - 1, by = CY - 14, n = spec.cores.length;
-      const pt = t => [Math.round(ax + (bx - ax) * t), Math.round(ay + (by - ay) * t + 4 * Math.sin(t * Math.PI))];
-      for (let i = 0; i <= 30; i++) { const [px, py] = pt(i / 30); s.set(px, py, T.brn[0]); }
-      spec.cores.forEach((c, i) => { const [px, py] = pt((i + .5) / n); s.rect(px, py + 1, 3, 2, c); s.set(px + 1, py + 3, c); });
+    let band = null;
+    if (spec.cores.length) { // bandeirolas: uma por público, num varal do mastro à proa; quadro 0 paradas, de 1 a 3 cada uma num tempo da batida
+      const [ax, ay] = topoMastro || [g.x0 + 5, CY - 18], bx = g.bow - 1, by = CY - 14, n = spec.cores.length, ox = ax - 1, oy = Math.min(ay, by) - 1;
+      const pt = t => [Math.round(ax + (bx - ax) * t) - ox, Math.round(ay + (by - ay) * t + 4 * Math.sin(t * Math.PI)) - oy];
+      band = { x: ox, y: oy, q: [0, 1, 2, 3].map(q => {
+        const v = new Spr(bx - ax + 8, Math.abs(by - ay) + 13);
+        for (let i = 0; i <= 30; i++) { const [px, py] = pt(i / 30); v.set(px, py, T.brn[0]); }
+        spec.cores.forEach((c, i) => {
+          const [px, py] = pt((i + .5) / n), k = q ? (i + q) % 3 : 0;
+          if (!k) { v.rect(px, py + 1, 3, 2, c); v.set(px + 1, py + 3, c); } else { v.rect(px, py + 1, 3, 1, c); v.rect(px + .5, py + 2, 3, 1, c); v.set(px + (k === 1 ? 1.5 : 2), py + (k === 1 ? 3 : 2.5), c); }
+        });
+        return solto(v).canvas();
+      }) };
     }
-    return barcos[chave] = { img: s.outline().canvas(), sub: sub.canvas(), fer, g };
+    const b = { img: s.outline().canvas(), sub: sub.canvas(), fer, g, vela, panos, eq, band, fase: [...chave].reduce((n, c) => (n * 31 + c.charCodeAt(0)) % 997, 7) / 997 }; // fase: cada barco bate as bandeiras e respira no seu tempo
+    let foto = null; // o barco inteiro e parado numa imagem só (para arrastar): o desenho fixo mais o quadro 0 de cada camada
+    b.foto = () => { if (!foto) { foto = tela(BW, BH); const c = hd(foto.getContext('2d')); c.drawImage(b.img, 0, 0); camadas(c, b, 0, 0, 0, false); } return foto; };
+    return barcos[chave] = b;
   }
 
   // ---------- cenário ----------
-  const H = 216, FAR = 62, MARGEM = 150, BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
-  const GR = ['#2c6140', '#3b7d45', '#4f974a', '#66ad52', '#8cc65e']; // grama, da sombra à luz
-  const AG = ['#1a3d6c', '#1f4f86', '#28649e', '#3479b0', '#4a94c2', '#7cc0d8']; // água, do fundo ao raso
-  const AR = ['#a5865a', '#c9a66c', '#dfc084', '#ecd096', '#f7e4b4']; // areia, da molhada à seca
-  const CASCA = ['#4a2f26', '#6e4a34', '#96694a'];
+  const H = 216, FAR = 62, MARGEM = 150;
+  const GR = [-1.6, -.6, 0, .5, 1.2].map(k => tom('#6a9a4e', k)); // grama, da sombra à luz: tons próximos, para o chão ficar calmo
+  const AG = [-2.3, -1.7, -1.1, -.5, 0, 1.1].map(k => tom('#4a8fd6', k)); // água, do fundo ao raso
+  const AR = ['#a27c59', '#bb9b6f', '#d9c08e', '#e8d6a4', '#f3e6b7']; // areia, da molhada à seca
+  const CASCA = ['#3a2630', '#5c3f44', '#7f5a54', '#a88068']; // casca: roxo-acinzentada na sombra, quente na luz
+  const GALHO_LUZ = '#a89a98', FOLHA = ['#004e38', '#00683c', '#3e8948', '#77a662', '#a0bb79'], FOLHA_AR = ['#002a24', '#013d2e', '#265c42', '#53795b', '#779171'];
+  const IPE_AM = ['#8a4a1c', '#c9861f', '#f0bf2e', '#ffe36a', '#fff6c2'], IPE_RS = ['#6a2f6a', '#a8508f', '#dc7fb0', '#f6b3d0', '#ffe3ee'];
   // Acaso fixo por índice: o cenário sai sempre igual, sem guardar nada.
   const az = (i, k = 0) => { let n = Math.imul(i + 1, 374761393) ^ Math.imul(k + 7, 668265263); n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
-  function dither(ctx, x0, y0, w, h, cols) {
-    for (let y = 0; y < h; y++) {
-      const f = y / Math.max(1, h - 1) * (cols.length - 1), i = Math.min(cols.length - 2, Math.floor(f)), fr = f - i;
-      for (let x = 0; x < w; x++) { const n = ((x * 7919 + (y0 + y) * 104729) % 13) / 13 - .5; ctx.fillStyle = (fr + n * .6) * 16 > BAYER[(y & 3) * 4 + (x & 3)] ? cols[i + 1] : cols[i]; ctx.fillRect(x0 + x, y0 + y, 1, 1); }
+  function dither(ctx, x0, y0, w, h, cols) { // faixas iguais de cima para baixo (x0, y0, w, h em pixels lógicos); use tons vizinhos da mesma rampa
+    const q = ctx._r || 1, fw = Math.round(w * q), fh = Math.round(h * q), X0 = Math.round(x0 * q), Y0 = Math.round(y0 * q), id = ctx.createImageData(fw, fh), d = id.data;
+    const rgb = cols.map(c => { const n = parseInt(c.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; });
+    const n = cols.length, faixa = h / n, jan = Math.min(8, faixa * .5); // miolo chapado; pontilha só na troca, na grade lógica, e só se a troca tiver 4 px ou mais
+    for (let y = 0; y < fh; y++) {
+      const yl = Math.floor(y / q) + .5, i = Math.min(n - 1, Math.floor(yl / faixa)), dn = (i + 1) * faixa - yl, up = yl - i * faixa;
+      for (let x = 0; x < fw; x++) {
+        const by = bayer((X0 + x) >> 1, (Y0 + y) >> 1), o = (y * fw + x) * 4;
+        const c = rgb[jan >= 4 && i < n - 1 && dn < jan / 2 && .5 - dn / jan > by ? i + 1 : jan >= 4 && i > 0 && up < jan / 2 && .5 - up / jan > 1 - by ? i - 1 : i];
+        d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
+      }
+    }
+    ctx.putImageData(id, X0, Y0);
+  }
+  // Tufo pequeno (vasos, plantas da lavoura): três discos, cada um deslocado para a luz; nunca concêntricos.
+  const tufo = (s, x, y, r, c) => { s.ell(x, y, r, r * .72, c[0]); s.ell(x - .5, y - .5, r - .6, r * .72 - .5, c[1]); s.ell(x - r * .32, y - r * .3, r * .42, r * .28, c[2]); };
+  // Tronco: cilindro em pé, com 1 px fino de luz à esquerda e de sombra à direita, anéis curtos e quebrados (sem veio vertical)
+  // e a faixa logo abaixo da copa um degrau mais escura (a sombra que a copa projeta nele).
+  function troncoCil(s, cx, y0, y1, larg, sombraAte) {
+    for (let y = y0; y < y1; y += .5) {
+      const w = larg(y), x0 = Math.round((cx - w / 2) * 2) / 2, esc = y < sombraAte;
+      s.rect(x0, y, w, .5, esc ? CASCA[0] : CASCA[1]); s.rect(x0, y, .5, .5, esc ? CASCA[1] : CASCA[3]); s.rect(x0 + w - .5, y, .5, .5, CASCA[0]);
+      if (!esc && Math.round(y * 2) % 6 === 0) s.rect(x0 + (hash(Math.round(y * 2), 7, Math.round(cx)) < .5 ? .5 : 1), y, Math.max(.5, w - 1.5), .5, CASCA[0]);
     }
   }
-  const tufo = (s, x, y, r, c) => { s.ell(x, y, r, r * .72, c[0]); s.ell(x - .4, y - .7, r - .7, r * .72 - .7, c[1]); s.ell(x - 1, y - 1.2, r * .45, r * .3, c[2]); };
-  function araucaria(hh, n) { // tronco reto e copa em candelabro, em dois andares
-    const s = new Spr(40, hh), cx = 19, V1 = [T.dgrn[0], T.dgrn[1], '#3f8446'], V2 = [T.dgrn[1], '#3f8446', T.grn[2]];
-    for (let y = 9; y < hh - 1; y++) { const wd = y > hh - 4 ? 5 : 3, x0 = cx - (wd >> 1); s.rect(x0, y, wd, 1, CASCA[1]); s.set(x0, y, CASCA[2]); s.set(x0 + wd - 1, y, CASCA[0]); if (y % 5 == 0) s.set(cx, y, CASCA[0]); }
-    const andar = (cy, rx, q, c) => {
-      const pt = k => { const a = Math.PI * k / (q - 1); return [cx - Math.cos(a) * rx, cy - Math.sin(a) * 2 - Math.abs(Math.cos(a)) * 4]; };
-      for (let k = 0; k < q; k++) { const [tx, ty] = pt(k); s.line(cx, cy + 4, tx, ty + 1, CASCA[0]); }
-      s.ell(cx, cy + 1.5, rx * .7, 2, c[0]);
-      for (let k = 0; k < q; k++) { const [tx, ty] = pt(k); tufo(s, tx, ty, 3.2, c); }
+  // Vento: a folhagem (fo) fica numa camada separada do tronco (tr), que não sai do lugar. No quadro 1 as linhas do alto da copa andam
+  // 1 px fino para a direita; no quadro 2, quase todas; a divisa é ondulada. O quadro 0 é o desenho parado. y0 e y1: topo e base da copa.
+  const VENTO = [9, .55, .2];
+  function balanca(tr, fo, y0, y1, q) {
+    const s = new Spr(fo.w, fo.h), fw = fo.fw; if (tr) s.p = tr.p.slice();
+    for (let Y = 0; Y < fo.fh; Y++) {
+      const d = (y1 * 2 - Y) / ((y1 - y0) * 2) > VENTO[q] + .07 * Math.sin(Y * .9) ? 1 : 0;
+      for (let X = 0; X < fw; X++) { const c = fo.p[Y * fw + X]; if (c) s.f(X + d, Y, c); }
+    }
+    return s.outline().canvas();
+  }
+  // srx, sry: sombra que a árvore projeta no chão. quadros(): os três quadros de vento, já com o acabamento do fundo, feitos só quando a cena pede.
+  const pronta = (tr, fo, y0, y1, srx, sry, extra) => {
+    const img = Object.assign(balanca(tr, fo, y0, y1, 0), { srx, sry: sry || 3 }, extra); let qs = null;
+    img.quadros = () => qs || (qs = [quente(img), quente(balanca(tr, fo, y0, y1, 1)), quente(balanca(tr, fo, y0, y1, 2))]);
+    return img;
+  };
+
+  // Pinheiro-do-paraná. A: adulta em guarda-chuva (o andar de baixo é o mais largo, o topo é uma cúpula rasa e o tronco fica
+  // nu em dois terços da altura); B: candelabro de três andares; C: jovem, cônica. Cada andar é [inserção, alcance, altura dos
+  // tufos, barriga do galho, posições dos tufos ao longo do alcance, raio do tufo]; as frações são do raio R e da profundidade D da copa.
+  const ARAUCARIAS = {
+    A: { R: .35, D: .32, topo: .04, rt: 2, ry: .85, and: [[0, 1, .5, .5, [1, .62], 1.5], [.18, .78, .27, .3, [1, .5], 1.75], [.36, .52, .14, 0, [1, 0], 2], [.52, .27, .1, 0, [1], 2]] },
+    B: { R: .27, D: .46, topo: .06, rt: 2.25, ry: .8, and: [[0, 1, .8, .5, [1, .5, 0], 2], [.3, .82, .5, .3, [1, .5], 2], [.6, .62, .21, 0, [1, 0], 2]] },
+    C: { R: .2, D: .68, topo: .06, rt: 1.5, ry: .75, and: [0, 1, 2, 3, 4].map(i => [i / 5.2, 1 - .17 * i, 1 - i / 5.2 - .05, .1, [1, .5, 0], 1.5]) }
+  };
+  function araucaria(hh, forma) {
+    const tr = new Spr(40, hh), s = new Spr(40, hh), cx = 20, yT = 3, H = hh - 1 - yT, F = FOLHA_AR, P = ARAUCARIAS[forma], R = P.R * H, D = P.D * H, yI = yT + D, topo = yT + P.topo * H + P.rt * .4;
+    troncoCil(tr, cx, topo, hh, y => y >= hh - 1 ? 4 : y >= yT + H * .7 ? 3 : 2, yI + 3);
+    const galho = (lado, y0, L, yP, barriga) => { // sai do tronco quase na horizontal e só sobe perto da ponta; fino, para a grama aparecer entre os galhos
+      const x0 = cx + lado, x1 = cx + lado * .6 * L, x2 = cx + lado * L;
+      for (let k = 0; k <= 1; k += 1 / (L * 4 + 4)) { const a = (1 - k) * (1 - k), b = 2 * k * (1 - k), c = k * k, x = a * x0 + b * x1 + c * x2, y = a * y0 + b * (y0 + barriga) + c * yP; s.dot(x, y + .5, CASCA[0]); s.dot(x, y, GALHO_LUZ); }
     };
-    andar(hh * .36, hh * .31, n, V1); andar(hh * .22, hh * .21, n - 2, V2); tufo(s, cx, hh * .1 + 1, 4, V2);
-    s.set(cx - 3, Math.round(hh * .56), CASCA[1]); s.set(cx - 4, Math.round(hh * .56) - 1, CASCA[1]); // toco de galho seco
-    return s.outline().canvas();
+    const rosa = (x, y, r, nivel) => { // tufo de grimpas: meia-lua de sombra embaixo à direita, calota de luz no alto à esquerda, agulhas só em cima
+      const rx = r + .25, ry = r * P.ry + .25;
+      s.varre(x - rx, y - ry, x + rx, y + ry + .5, (qx, qy) => {
+        const nx = (qx - x) / rx, ny = (qy - y) / ry;
+        if (nx * nx + ny * ny > 1) return ny > 0 && nx * nx + ((qy - .5 - y) / ry) ** 2 <= 1 ? F[0] : undefined; // um pixel fino de sombra sob o tufo
+        const l = .5 - .32 * nx - .42 * ny; return F[Math.max(0, Math.min(4, (l > .64 ? 3 : l < .38 ? 1 : 2) + nivel))];
+      });
+      [-150, -110, -70, -30].forEach((g, i) => { if (r < 1.75 && i % 2) return; const a = g * Math.PI / 180; s.dot(x + Math.cos(a) * (rx + .25), y + Math.sin(a) * (ry + .25), F[Math.max(1, Math.min(4, 2 + nivel + (g < -90 ? 1 : 0)))]); });
+    };
+    const nivelDe = (x, y) => { const v = -((x - cx) / R * .6 + (y - (yT + D / 2)) / (D / 2) * .8); return v > .3 ? 1 : v < -.3 ? -1 : 0; }; // tufos do alto e da esquerda pegam mais luz
+    P.and.forEach(([dy, l, ty, bar, us, r], i) => {
+      const y0 = yI - dy * D, L = l * R, yt = yT + ty * D, pts = [];
+      [-1, 1].forEach(lado => galho(lado, y0, L - r * .3, yt + .6 * r, bar));
+      us.forEach(u => (u ? [-u, u] : [0]).forEach(q => pts.push(q)));
+      pts.sort((a, b) => Math.abs(b) - Math.abs(a)).forEach(u => { const dentro = Math.abs(u) < 1, tras = dentro && i % 2 === 1, x = cx + u * L, y = yt + (dentro ? (tras ? -.5 : .5) : 0); rosa(x, y, r, nivelDe(x, y) - (tras ? 1 : 0)); });
+    });
+    rosa(cx, yT + P.topo * H + P.rt * .2, P.rt, 1);
+    return pronta(tr, s, yT, yI + 2, R * .55, 2.5, { sdx: 3 });
   }
-  function copa(c, w, hh) { // árvore de copa redonda; amarela ou rosa, é ipê
-    const s = new Spr(w, hh), cx = Math.round(w / 2);
-    for (let y = Math.round(hh * .5); y < hh - 1; y++) { s.rect(cx - 1, y, 3, 1, CASCA[1]); s.set(cx - 1, y, CASCA[2]); s.set(cx + 1, y, CASCA[0]); }
-    s.line(cx, hh * .62, cx - 5, hh * .42, CASCA[0]); s.line(cx, hh * .62, cx + 5, hh * .4, CASCA[0]);
-    [[0, .3, .32], [-.24, .38, .22], [.24, .36, .23], [-.1, .2, .22], [.14, .18, .2]].forEach(([dx, fy, fr]) => tufo(s, cx + dx * w, hh * fy, fr * w, c));
-    return s.outline().canvas();
+  // Copa redonda: tufos de dois ou três tamanhos, o maior no centro-alto, cada um com um disco escuro por baixo (que faz de
+  // sombra e de separação entre tufos) e claridade conforme o lugar na copa: os de cima à esquerda mais claros, os de baixo à direita mais escuros.
+  const TUFOS_BOLA = [[0, -.08, .26], [-.3, .04, .19], [.3, .02, .19], [-.16, -.2, .19], [.17, -.22, .16], [-.12, .17, .16], [.14, .15, .19]];
+  // Ipê florido: floresce sem folhas. Galhada à vista e cachos pequenos, com vãos entre eles.
+  const TUFOS_IPE = [[-.34, .02, .12], [.34, 0, .12], [-.2, -.16, .13], [.2, -.18, .12], [0, -.27, .13], [0, -.05, .14], [-.15, .12, .12], [.16, .1, .13], [-.37, -.14, .1], [.38, -.13, .1], [0, .15, .11]];
+  function copa(F, w, hh, sem, ipe) {
+    const tr = new Spr(w, hh), s = new Spr(w, hh), cx = w / 2, cw = w - 4, cyC = hh * .34, yTr = Math.round(cyC + cw * (ipe ? .02 : .1));
+    troncoCil(tr, cx, yTr, hh, y => y >= hh - 1 ? 5 : y >= hh - 2.5 ? 4 : 3, cyC + cw * .3 + 3);
+    tr.dot(cx - 3, hh - .5, CASCA[1]); tr.dot(cx + 2.5, hh - .5, CASCA[0]); // raízes
+    const tufos = (ipe ? TUFOS_IPE : TUFOS_BOLA).map(([dx, dy, fr], i) => ({ x: cx + dx * cw + hash(i, sem, 3) - .5, y: cyC + dy * cw + hash(i, sem, 4) - .5, r: fr * cw * (.9 + hash(i, sem, 5) * .2), i })).sort((a, b) => a.y - b.y);
+    tufos.forEach(q => { const n = Math.max(4, Math.hypot(q.x - cx, q.y - yTr) * 2); for (let k = 0; k <= n; k++) { const x = cx + (q.x - cx) * k / n, y = yTr + 1.5 + (q.y - yTr - 1.5) * k / n; s.dot(x, y + .5, CASCA[0]); s.dot(x + .5, y + .5, CASCA[0]); s.dot(x, y, ipe ? CASCA[2] : CASCA[1]); } }); // galhos em forquilha
+    tufos.forEach(q => {
+      const v = -((q.x - cx) / (cw / 2) * .6 + (q.y - cyC) / (cw / 2) * .8), nivel = v > .3 ? 1 : v < -.3 ? -1 : 0, ry = q.r * .8;
+      s.disc(q.x + .5, q.y + 1, q.r + (ipe ? .5 : 1), ry + (ipe ? .5 : 1), F[0]); s.tufoLuz(q.x, q.y, q.r, ry, F, sem * 31 + q.i, nivel);
+    });
+    return pronta(tr, s, 1, cyC + cw * .34, cw * .34, 3, { sdx: 3, petala: ipe ? [F[3], F[2]] : null });
   }
-  const ARVORES = [araucaria(48, 7), araucaria(42, 7), araucaria(36, 5), copa(['#a8701c', '#e0ac34', '#ffe07a'], 28, 34), copa([T.dgrn[1], T.grn[1], T.grn[2]], 30, 36), copa(['#9a4a7a', '#d07aa8', '#f2b0cc'], 26, 32)];
-  const ARBUSTOS = [0, 1, 2].map(v => { const s = new Spr(16, 11); tufo(s, 5, 6, 4.5, T.grn); tufo(s, 10.5, 6.5, 4.5, [T.dgrn[1], T.grn[1], T.grn[2]]); if (v) [[4, 4], [8, 6], [12, 5], [10, 8]].forEach(([x, y]) => s.set(x, y, v == 1 ? T.red[2] : T.yel[2])); return s.outline().canvas(); });
+  // 48 = adulta em guarda-chuva, 42 = candelabro, 36 = jovem; depois ipê-amarelo, copa verde e ipê-rosa.
+  const ARVORES = [araucaria(48, 'A'), araucaria(42, 'B'), araucaria(36, 'C'), copa(IPE_AM, 28, 34, 3, true), copa(FOLHA, 30, 36, 5, false), copa(IPE_RS, 26, 32, 7, true)];
+  const ARBUSTOS = [0, 1, 2].map(v => { // dois tufos atrás e um na frente, mais baixo e mais largo; flores em blocos de 2x2 px finos, agrupadas em dois lugares
+    const s = new Spr(16, 11);
+    [[4.5, 5, 3.4, 2.6, 0], [11, 5.5, 3.4, 2.6, -1], [8, 7, 4, 2.6, 0]].forEach(([x, y, rx, ry, n], i) => { s.disc(x + .5, y + .5, rx + .5, ry + .5, FOLHA[0]); s.tufoLuz(x, y, rx, ry, FOLHA, 40 + v * 7 + i, i ? n : 1); });
+    if (v) [[3, 4], [4, 5], [10, 7], [11, 6]].forEach(([x, y]) => s.rect(x, y, 1, 1, v == 1 ? T.red[2] : T.yel[2]));
+    return pronta(null, s, 2, 9.5, 7, 2, { sdx: 1 });
+  });
+  // Tapete de pétalas sob o ipê: ralo, mais denso no centro, desenhado antes da sombra da copa.
+  function tapete(ctx, x, y, rx, ry, cores, sem) {
+    for (let i = 0; i < rx * 5; i++) { const a = hash(i, sem, 11) * 6.283, d = Math.pow(hash(i, sem, 12), .7), fx = Math.round((x + Math.cos(a) * d * rx) * 2) / 2, fy = Math.round((y + Math.sin(a) * d * ry) * 2) / 2; ctx.fillStyle = cores[i % 2]; ctx.fillRect(fx, fy, 1, .5); }
+  }
   const CASA_X = 62, CASA_Y = 10;
-  const CASA = (() => { // telhado de telha, chaminé, porta e janelas com floreira
-    const s = new Spr(54, 42), TL = ['#8e2f33', '#c2473d', '#e8805c'];
-    s.sRect(38, 1, 6, 8, T.ter); s.rect(37, 1, 8, 2, T.ter[0]);
-    for (let y = 5; y < 20; y++) { const f = y - 5, rec = Math.max(0, 2 - f); for (let x = 1 + rec; x < 53 - rec; x++) s.set(x, y, f % 4 == 3 ? TL[0] : (x + (f >> 2) * 2) % 4 == 0 ? TL[0] : f % 4 == 0 ? TL[2] : TL[1]); }
-    s.rect(3, 4, 48, 1, TL[2]);
-    s.rect(4, 20, 46, 18, T.crm[1]); s.rect(4, 20, 46, 2, T.crm[0]); s.rect(4, 22, 1, 16, T.crm[2]); s.rect(49, 20, 1, 18, T.crm[0]); s.rect(4, 36, 46, 2, T.gry[1]);
-    s.rect(23, 25, 8, 13, T.wood[0]); s.rect(24, 26, 6, 12, T.wood[1]); s.rect(24, 26, 1, 12, T.wood[2]); s.rect(24, 31, 6, 1, T.wood[0]); s.set(28, 33, T.yel[2]); s.rect(21, 38, 12, 2, T.gry[2]);
-    [8, 37].forEach(x => { s.rect(x, 25, 9, 7, T.wood[0]); s.rect(x + 1, 26, 7, 5, T.blu[2]); s.rect(x + 4, 26, 1, 5, T.wht[2]); s.rect(x + 1, 28, 7, 1, T.wht[2]); s.set(x + 2, 27, '#ffffff'); s.rect(x, 32, 9, 2, T.ter[1]); [1, 3, 5, 7].forEach((dx, i) => s.set(x + dx, 31, i % 2 ? T.grn[2] : i ? T.yel[2] : T.red[2])); });
+  const CASA = (() => { // caixa em 3/4 (regra 10.10): telhado de telha, chaminé de tijolo, reboco chapado, porta almofadada e janelas com floreira
+    const s = new Spr(54, 42);
+    s.rect(38, 1, 6, 8, T.ter[1]); s.rect(42, 1, 2, 8, T.ter[0]); for (let y = 4; y < 8; y += 2) s.rect(38, y, 4, .5, T.ter[0]); s.rect(37, 1, 8, 1.5, T.ter[1]); s.rect(37, 1, 8, .5, T.ter[2]); s.rect(37, 2.5, 8, .5, T.ter[0]);
+    telhas(s, 1, 5, 52, 15, T.red, 2); s.rect(3, 4, 48, .5, T.red[2]); s.rect(3, 4.5, 48, .5, T.red[1]);
+    s.rect(4, 20, 46, 18, T.crm[1]); s.rect(4, 20, .5, 18, T.crm[2]); s.rect(48, 20, 2, 18, T.crm[0]); s.rect(4, 20, 46, 1.5, T.crm[0]); // luz à esquerda, sombra à direita e a sombra do beiral
+    granula(s, 5, 23, 42, 12, T.crm[1], 1, .07);
+    s.rect(4, 36, 46, 2, T.gry[1]); s.rect(4, 36, 46, .5, T.gry[2]); s.rect(4, 37.5, 46, .5, T.gry[0]); for (let x = 7; x < 50; x += 5) s.rect(x, 36.5, .5, 1, T.gry[0]); // rodapé de pedra
+    porta(s, 23, 25, 8, 13); s.rect(21, 38, 12, 2, T.gry[1]); s.rect(21, 38, 12, .5, T.gry[2]); s.rect(21, 39.5, 12, .5, T.gry[0]);
+    s.rect(26.5, 22.5, 1, 1.5, T.yel[2]); s.rect(26.5, 24, 1, .5, T.yel[0]); // lampião sobre a porta
+    [8, 37].forEach(x => { // janela, floreira de barro e flores em blocos de 2x2 px finos, em dois grupos
+      janela(s, x, 25, 9, 7); s.rect(x, 32, 9, 2, T.ter[1]); s.rect(x, 32, 9, .5, T.ter[2]); s.rect(x, 33.5, 9, .5, T.ter[0]);
+      s.rect(x + .5, 31.5, 8, .5, T.grn[1]); [T.red[2], T.yel[2], T.wht[2], T.org[2]].forEach((c, i) => s.rect(x + 1 + [0, 1.5, 4.5, 6][i], 31, 1, 1, c));
+    });
     return s.outline().canvas();
   })();
-  const CAPIVARA = (() => { const s = new Spr(16, 10), c = ['#5e3d26', '#8a5f3a', '#b0855a']; s.sEll(6, 5, 5.5, 3, c); s.sRect(10, 2, 4, 4, c); s.set(10, 1, c[0]); s.set(12, 3, OL); s.set(14, 4, c[0]); s.set(3, 8, c[0]); s.set(8, 8, c[0]); return s.outline().canvas(); })();
-  const GARCA = (() => { const s = new Spr(11, 15); s.rect(4, 10, 1, 4, T.yel[0]); s.rect(6, 10, 1, 4, T.yel[0]); s.sEll(4.5, 8, 3.2, 2.2, T.wht); s.line(7, 7, 8, 5, T.wht[2]); s.line(8, 5, 7, 3, T.wht[2]); s.rect(6, 2, 2, 2, T.wht[2]); s.rect(8, 3, 2, 1, T.yel[1]); return s.outline().canvas(); })();
-  const PEDRA = (() => { const s = new Spr(10, 7); s.sEll(4.5, 3.5, 3.6, 2.2, T.gry); return s.outline().canvas(); })();
+  // Bichos e pedra: tons chapados com a luz do alto à esquerda; olho de 1x2 px finos, sem brilho e sem pelo sorteado.
+  // Quadros dos bichos: o 0 é o desenho parado (o que o kit exporta); os outros só mexem a cabeça, o corpo e a luz ficam onde estão.
+  const comQuadros = (fn, n) => { const img = fn(0); let qs = null; img.quadros = () => qs || (qs = [quente(img)].concat(Array.from({ length: n - 1 }, (_, i) => quente(fn(i + 1))))); return img; };
+  const CAPIVARA = comQuadros(q => { // 1: abana a orelha (deitada para trás); 2: baixa a cabeça meio pixel
+    const s = new Spr(16, 10), c = trio(T.jute[0]), dy = q === 2 ? .5 : 0;
+    s.rect(3, 7.5, 1.5, 2, c[0]); s.rect(8.5, 7.5, 1.5, 2, c[0]); s.sEll(6.5, 5.5, 5.5, 3, c);
+    s.rect(10, 2.5 + dy, 4.5, 3.5, c[1]); s.rect(10, 2.5 + dy, 4.5, .5, c[2]); s.rect(14, 3.5 + dy, .5, 2.5, c[0]); s.rect(10.5, 5.5 + dy, 4, .5, c[0]); // cabeça em bloco, focinho na sombra
+    if (q === 1) s.rect(10, 2, 1.5, .5, c[0]); else s.rect(10.5, 1.5 + dy, 1, 1, c[0]);
+    s.rect(12.5, 3.5 + dy, .5, 1, OL);
+    return s.outline().canvas();
+  }, 3);
+  const GARCA = comQuadros(q => { // 1: pescoço dobrado para a frente, bico apontado para a água
+    const s = new Spr(11, 15);
+    s.rect(4, 10, .5, 4, T.yel[0]); s.rect(6, 10, .5, 4, T.yel[0]); s.sEll(4.5, 8, 3.2, 2.2, T.wht);
+    if (q) {
+      s.line(7, 7, 8, 5.5, T.wht[2]); s.rect(7.5, 4.5, 2, 2, T.wht[2]); s.rect(7.5, 6.5, .5, 1, T.wht[0]);
+      s.rect(9, 6.5, .5, 2, T.yel[1]); s.rect(9.5, 6.5, .5, 1.5, T.yel[0]); s.rect(8.5, 5, .5, 1, OL);
+    } else {
+      s.line(7, 7, 8, 5, T.wht[2]); s.line(8, 5, 7, 3, T.wht[2]); s.rect(6, 2, 2, 2, T.wht[2]); s.rect(7.5, 5, .5, 2, T.wht[0]);
+      s.rect(8, 3, 2, .5, T.yel[1]); s.rect(8, 3.5, 2, .5, T.yel[0]); s.rect(7, 2.5, .5, 1, OL);
+    }
+    s.rect(2.5, 8, 3, .5, T.wht[0]); s.rect(3, 9, 2, .5, T.wht[0]);
+    return s.outline().canvas();
+  }, 2);
+  const PEDRA = (() => { const s = new Spr(10, 7); s.sEll(4.5, 3.5, 3.6, 2.2, T.gry); s.rect(2.5, 2, 2, .5, tom(T.gry[2], .6)); s.rect(4.5, 4.5, 2, .5, T.gry[0]); s.rect(6, 3, .5, 1, T.gry[0]); return s.outline().canvas(); })();
   const TRALHA = (() => { // caixote, saco e barril ao pé do trapiche
     const s = new Spr(31, 16);
-    s.sRect(1, 6, 10, 9, T.wood); s.line(2, 7, 9, 13, T.wood[0]); s.rect(1, 10, 10, 1, T.wood[0]);
-    s.sEll(16, 11, 4, 4, T.jute); s.rect(14, 5, 4, 2, T.jute[1]); s.rect(14, 7, 4, 1, T.brn[1]);
-    s.sRect(22, 5, 7, 10, T.brn); s.rect(22, 7, 7, 1, T.mtl[1]); s.rect(22, 12, 7, 1, T.mtl[1]);
+    box3(s, 1, 6, 10, 2, 7, T.wood, T.wood); s.rect(1, 11, 9, .5, T.wood[0]);
+    s.sEll(16, 11, 4, 4, T.jute); s.rect(14, 5, 4, 2, T.jute[1]); s.rect(14, 7, 4, .5, T.brn[1]);
+    s.rect(22, 5, 7, 10, T.brn[1]); s.rect(26.5, 5, 2.5, 10, T.brn[0]); s.rect(22, 5, 7, .5, T.brn[2]); [7, 12].forEach(y => { s.rect(22, y, 7, 1, T.mtl[1]); s.rect(26.5, y, 2.5, 1, T.mtl[0]); }); // barril: cilindro de dois tons
     return s.outline().canvas();
   })();
-  const ESCRITORIO = (() => {
-    const s = new Spr(74, 62), TE = ['#5b6676', '#8793a3', '#b9c3cf'];
-    for (let y = 2; y < 22; y++) for (let x = 1; x < 73; x++) s.set(x, y, y == 2 ? TE[2] : y >= 20 ? TE[0] : x % 6 == 0 ? TE[0] : x % 6 == 1 ? TE[2] : TE[1]); // telhado de chapa ondulada
-    s.rect(4, 22, 66, 26, T.crm[1]); s.rect(4, 22, 66, 2, T.crm[0]); s.rect(4, 24, 1, 24, T.crm[2]); s.rect(69, 22, 1, 26, T.crm[0]);
-    s.rect(4, 26, 66, 3, T.grn[1]); s.rect(4, 26, 66, 1, T.grn[2]); s.rect(4, 29, 66, 1, T.grn[0]);
-    s.rect(4, 45, 66, 3, T.gry[1]); s.rect(4, 45, 66, 1, T.gry[2]);
-    s.rect(30, 32, 14, 16, T.wood[0]); [31, 37].forEach(x => { s.rect(x, 33, 6, 15, T.wood[1]); s.rect(x, 33, 1, 15, T.wood[2]); s.rect(x + 1, 35, 4, 5, T.blu[2]); s.set(x + 1, 35, '#ffffff'); }); s.set(36, 42, T.yel[2]); s.set(37, 42, T.yel[2]);
-    [8, 19, 48, 59].forEach(x => { s.rect(x - 1, 31, 9, 9, T.wht[1]); s.rect(x, 32, 7, 7, T.blu[1]); s.rect(x, 32, 7, 3, T.blu[2]); s.rect(x + 3, 32, 1, 7, T.wht[2]); s.set(x + 1, 33, '#ffffff'); s.set(x + 2, 34, '#ffffff'); s.rect(x - 1, 40, 9, 1, T.gry[0]); });
-    s.sRect(23, 4, 28, 22, T.wht); // placa com o logo
-    s.rect(4, 48, 66, 2, T.gry[0]); s.rect(27, 50, 20, 2, T.gry[2]); s.rect(29, 52, 16, 1, T.gry[1]);
-    [24, 47].forEach(x => { s.sRect(x, 46, 4, 4, T.ter); tufo(s, x + 1.5, 44, 2.6, T.grn); }); // vasos na entrada
+  const ESCRITORIO = (() => { // telhado de chapa em faixas, reboco chapado com faixa verde, porta dupla envidraçada e a placa do logo
+    const s = new Spr(74, 62), vidro = (x, y, w, h) => { s.rect(x, y, w, h, T.mus[1]); s.rect(x, y, w, .5, T.mus[0]); for (let k = 0; k < 3; k++) s.dot(x + .5 + k * .5, y + 2 - k * .5, T.fish[2]); };
+    chapa(s, 1, 2, 72, 20, T.mtl);
+    s.rect(4, 22, 66, 26, T.crm[1]); s.rect(4, 22, .5, 26, T.crm[2]); s.rect(68, 22, 2, 26, T.crm[0]); s.rect(4, 22, 66, 1.5, T.crm[0]); granula(s, 5, 30, 62, 15, T.crm[1], 2, .06); // luz à esquerda, sombra à direita e a sombra do beiral
+    s.rect(4, 26, 66, 3, T.grn[1]); s.rect(4, 26, 66, .5, T.grn[2]); s.rect(4, 28.5, 66, .5, T.grn[0]); s.rect(68, 26.5, 2, 2, T.grn[0]);
+    s.rect(4, 45, 66, 3, T.gry[1]); s.rect(4, 45, 66, .5, T.gry[2]); for (let x = 8; x < 70; x += 6) s.rect(x, 45.5, .5, 2.5, T.gry[0]);
+    s.rect(30, 32, 14, 16, T.wood[0]); // porta dupla envidraçada, com almofada embaixo e puxadores
+    [31, 37].forEach(x => { s.rect(x, 33, 6, 15, T.wood[1]); s.rect(x, 33, .5, 15, T.wood[2]); vidro(x + 1, 34.5, 4, 7); s.rect(x + 1, 43, 4, .5, T.wood[0]); s.rect(x + 1, 43, .5, 3.5, T.wood[0]); s.rect(x + 1.5, 46, 3.5, .5, T.wood[2]); });
+    s.rect(36, 41, .5, 2.5, T.yel[2]); s.rect(37.5, 41, .5, 2.5, T.yel[2]);
+    [8, 19, 48, 59].forEach(x => { janela(s, x - 1, 31, 9, 9, T.wht[0]); s.rect(x - 1, 40, 9, 1, T.gry[1]); s.rect(x - 1, 40, 9, .5, T.gry[2]); });
+    escurece(s, 24, 26, 28, 1); escurece(s, 51, 5, 1, 21); // sombra da placa no telhado e na parede
+    s.rect(23, 4, 28, 22, T.wht[2]); s.rect(23, 25.5, 28, .5, T.wht[0]); s.rect(50.5, 4, .5, 22, T.wht[0]); [[24, 5], [49.5, 5], [24, 24.5], [49.5, 24.5]].forEach(([x, y]) => s.dot(x, y, T.mtl[0])); // placa com o logo, presa por parafusos
+    s.rect(4, 48, 66, 2, T.gry[0]); s.rect(27, 50, 20, 2, T.gry[1]); s.rect(27, 50, 20, .5, T.gry[2]); s.rect(29, 52, 16, 1, T.gry[1]); s.rect(29, 52, 16, .5, T.gry[0]);
+    [24, 47].forEach(x => { s.rect(x, 46, 4, 4, T.ter[1]); s.rect(x, 46, 4, .5, T.ter[2]); s.rect(x + 3, 46.5, 1, 3.5, T.ter[0]); tufo(s, x + 1.5, 44, 2.6, T.grn); s.rect(x + .5, 42.5, 1, .5, T.red[2]); s.rect(x + 2, 43, 1, .5, T.yel[2]); }); // vasos floridos na entrada
     return s.outline().canvas();
   })();
-  const BARRACA = c => { // toldo listrado de barra recortada, fundo de lona e balcão de tábuas
+  const BARRACA = c => { // toldo listrado com barra em festão, fundo de lona escura e balcão em caixa (tampo na luz, frente na base)
     const s = new Spr(44, 46);
-    s.rect(5, 16, 34, 20, '#6e5038'); s.rect(5, 16, 34, 3, '#4f3828');
-    [3, 39].forEach(x => { s.rect(x, 14, 2, 30, T.wood[1]); s.rect(x + 1, 14, 1, 30, T.wood[0]); });
-    for (let x = 1; x < 43; x++) { const st = ((x - 1) >> 2) % 2 ? c : T.crm, m = (x - 1) & 3; s.rect(x, 2, 1, 11, st[1]); s.rect(x, 2, 1, 2, st[2]); if (m == 3) s.rect(x, 4, 1, 9, st[0]); s.rect(x, 13, 1, 2, st[0]); if (m == 1 || m == 2) s.set(x, 15, st[0]); }
-    s.rect(2, 34, 40, 2, T.wood[2]); s.rect(2, 36, 40, 6, T.wood[1]); for (let x = 2; x < 42; x += 5) s.rect(x, 37, 1, 5, T.wood[0]); s.rect(2, 36, 40, 1, T.brn[0]); s.rect(2, 41, 40, 1, T.wood[0]);
+    s.rect(5, 14, 34, 22, T.brn[1]);
+    [3, 39].forEach(x => { s.rect(x, 14, 2, 30, T.wood[1]); s.rect(x + 1, 14, 1, 30, T.wood[0]); }); // postes: cilindros de dois tons
+    toldo(s, 1, 2, 42, 11, c);
+    s.rect(2, 34, 40, 2, T.wood[2]); s.rect(2, 36, 40, 6, T.wood[1]); s.rect(2, 36, 40, .5, tom(T.wood[2], 1)); s.rect(40, 36.5, 2, 5.5, T.wood[0]); s.rect(2, 41.5, 40, .5, T.wood[0]);
+    for (let x = 7; x < 40; x += 5) s.rect(x, 36.5, .5, 5, T.wood[0]);
     return s.outline().canvas();
   };
-  const sombra = (ctx, x, y, rx, ry, a = .28) => { ctx.globalAlpha = a; ctx.fillStyle = '#10202a'; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1; };
+  const COR_SOMBRA = '#10202a'; // sombra projetada: fria, um tom só, borda dura; nunca preto
+  // Sombra de contato (regra 5.7): uma linha de px fino no tom escuro do chão, colada na base e 1 px mais larga à direita.
+  // segs = [[dx, dy, largura], ...] a partir do canto do desenho; vai por cima do contorno da base.
+  const contato = (ctx, x, y, segs, chao) => { ctx.fillStyle = tom(chao, -2); segs.forEach(([dx, dy, w]) => ctx.fillRect(x + dx, y + dy, w + 1, .5)); };
+  const sombra = (ctx, x, y, rx, ry, a = .28) => { ctx.globalAlpha = a; ctx.fillStyle = COR_SOMBRA; x = Math.round(x * 2) / 2; y = Math.round(y * 2) / 2; for (let dy = -ry; dy <= ry; dy += .5) { const q = 1 - (dy / (ry + .25)) ** 2; if (q <= 0) continue; const hw = Math.round(rx * Math.sqrt(q) * 2) / 2; ctx.fillRect(x - hw, y + dy, hw * 2, .5); } ctx.globalAlpha = 1; };
 
   // Margem de baixo: escritório (equipe), quatro barracas e o trapiche. x em pixels lógicos.
   const ESTRUTURAS = [
@@ -1006,129 +1442,318 @@ window.RIO = (function () {
     { x: 218, y: 160, w: 44, h: 46, aba: 'municipio', rotulo: 'Municípios', dica: 'Barraca dos mapas: território. Clique para escolher os municípios.', cor: T.grn, ic: () => MAPA },
     { x: 266, y: 118, w: 30, h: 52, aba: null, rotulo: '', dica: 'Trapiche: quando o arranjo tem cadeia ou área, municípios e equipe, a canoa entra no rio.' }
   ];
+  // Trapiche (regra 10.15), pintado uma vez: tampo claro, cada tábua com linha de luz, corpo e junta de 1 px fino, veios em posição
+  // fixa por semente e uma tábua em cada quatro no tom vizinho; lateral voltada para a câmera em sombra; estacas em cilindros de dois tons.
+  // O desenho começa 3 px à esquerda e 4 acima da estrutura.
+  const TRAPICHE = (() => {
+    const e = ESTRUTURAS[ESTRUTURAS.length - 1], s = new Spr(e.w + 6, e.h + 9), X = 3, Y = 4, viz = tom(T.wood[2], -.5), luz = tom(T.wood[2], 1);
+    for (let y = 0, k = 0; y < e.h; y += 3, k++) {
+      const alt = Math.min(3, e.h - y);
+      s.rect(X, Y + y, e.w, alt, k % 4 === 2 ? viz : T.wood[2]); s.rect(X, Y + y, e.w, .5, luz); if (alt < 3) continue;
+      s.rect(X, Y + y + 2.5, e.w, .5, T.wood[0]);
+      for (let i = 0; i < 2; i++) s.rect(X + 3 + Math.floor(hash(k, i, 70) * (e.w - 9)), Y + y + 1 + i * .5, hash(k, i, 71) < .5 ? 1 : 1.5, .5, T.wood[1]);
+    }
+    s.rect(X, Y + e.h, e.w, 3, T.wood[0]); s.rect(X, Y + e.h, e.w, .5, luz);
+    [-3, 22, e.h - 4].forEach(y => [-2, e.w - 2].forEach(x => { s.rect(X + x, Y + y, 4, 7, T.brn[1]); s.rect(X + x + 2.5, Y + y, 1.5, 7, T.brn[0]); s.rect(X + x, Y + y, 4, 1, T.brn[2]); }));
+    return s.outline().canvas();
+  })();
+  // ---------- chão: grama, água e areia (regra 10) ----------
+  // Ruído suave com semente (tabela de 64x64 que se repete, interpolada): dá manchas e ondulação, nunca acaso por pixel.
+  const RUIDO = Array.from({ length: 4096 }, (_, i) => hash(i & 63, i >> 6, 91));
+  const suave = (x, y, esc = 16, k = 0) => {
+    x = x / esc + k * 17.3; y = y / esc + k * 9.1;
+    const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+    const g = (a, b) => RUIDO[((b & 63) << 6) | (a & 63)], a = g(xi, yi), b = g(xi + 1, yi), c = g(xi, yi + 1), d = g(xi + 1, yi + 1);
+    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+  };
+  // Pinta um retângulo com cor(x, y) avaliada uma vez por pixel lógico (bloco de 2x2 px finos): pal = cores, fn devolve o índice.
+  function chao(ctx, x0, y0, w, h, pal, fn) {
+    const q = ctx._r || 1, fw = Math.round(w * q), fh = Math.round(h * q), id = ctx.createImageData(fw, fh), d = id.data;
+    const rgb = pal.map(c => { const n = parseInt(c.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; });
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const c = rgb[fn(x0 + x, y0 + y)];
+      for (let j = 0; j < q; j++) for (let i = 0; i < q; i++) { const o = ((y * q + j) * fw + x * q + i) * 4; d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255; }
+    }
+    ctx.putImageData(id, Math.round(x0 * q), Math.round(y0 * q));
+  }
+  // Grama: 0 sombra, 1 base, 2 luz. Miolo chapado; manchas de sombra e de luz em uns 4% da área cada. e = tamanho da mancha, q = zona de silêncio.
+  const gramaTom = (x, y, e = 1, q = 1) => { const v = suave(x, y * 1.7, 13 * e, 1); return v < .126 * q ? 0 : v > 1 - .13 * q ? 2 : 1; };
+  // Água de um rio deitado entre y0 (margem de lá) e y1 (praia): índice em AG. Faixas de profundidade com a troca pontilhada
+  // (4 a 8 px, na grade lógica) e marolas de 1 px a cada 7, onduladas e quebradas, no tom seguinte; sem marola nos últimos px (calmo).
+  const AGUA_RIO = [3, 2, 3, 4], AGUA_CORTES = [.2, .5, .8]; // céu refletido junto ao barranco, fundo no meio, raso junto à praia
+  const aguaTom = (x, y, y0, y1, tons = AGUA_RIO, cortes = AGUA_CORTES, calmo = 5) => {
+    const L = y1 - y0, jan = Math.max(4, Math.min(8, L * .09)), yy = y + Math.round(suave(x, 0, 30, 8) * 4 - 2), by = bayer(x, y); let i = tons[0];
+    for (let k = 0; k < cortes.length; k++) if ((yy - y0 - L * cortes[k]) / jan + .5 > by) i = tons[k + 1];
+    const r = Math.floor((y - y0) / 7), yl = y0 + r * 7 + 3 + Math.round(suave(x, r * 5, 20, 6) * 2 - 1);
+    if (y === yl && y < y1 - calmo && suave(x + r * 37, r * 11, 7, 3) + (by - .5) * .2 > .6 - .2 * (y - y0) / L) i++;
+    return Math.min(5, i);
+  };
+  // Areia: índice em AR. d = distância da água. Faixa molhada de 2 a 4 px um tom abaixo do miolo, troca pontilhada de 4 px e manchas
+  // inclinadas em "S" no tom vizinho (uns 4% mais escuras, 4% mais claras); q = zona de silêncio.
+  const areiaTom = (x, y, d, q = 1) => {
+    const w = 2.5 + suave(x, 0, 9, 4) * 1.5;
+    if (d < w) return 2;
+    if (d < w + 4) return (d - w + .5) / 4 > bayer(x, y) ? 3 : 2;
+    const v = suave(x + y * 1.3 + 3 * Math.sin(y * .7), y * 2.6, 10, 5);
+    return v < .17 * q ? 2 : v > 1 - .16 * q ? 4 : 3;
+  };
+  // Tufo de capim (regra 10.4): n lâminas de 1 px fino em leque, a do meio mais alta (alt px finos), pé no tom de sombra, ponta
+  // no tom claro e uma linha de sombra embaixo, 1 px fino mais larga à direita. px(x, y, w, h, cor) pinta em pixels lógicos.
+  const capim = (px, x, y, n, alt, esc, luz) => {
+    const m = n >> 1; px(x - m * .5, y + .5, n * .5 + .5, .5, esc);
+    for (let i = 0; i < n; i++) {
+      const d = i - m, h = Math.max(2, alt - Math.abs(d)), pe = h >> 1, bx = x + d * .5, fora = i === 0 || i === n - 1 ? Math.sign(d) * .5 : 0;
+      px(bx, y + .5 - pe * .5, .5, pe * .5, esc); px(bx + fora, y + .5 - h * .5, .5, (h - pe) * .5, luz);
+    }
+  };
+  const disco = (ctx, x, y, rx, ry, cor) => { ctx.fillStyle = cor; for (let dy = -ry; dy <= ry; dy += .5) { const q = 1 - (dy / (ry + .25)) ** 2; if (q <= 0) continue; const hw = Math.round(rx * Math.sqrt(q) * 2) / 2; ctx.fillRect(x - hw, y + dy, hw * 2, .5); } };
+  // Sombra de construção (regra 5.5): a pegada (de x0 a x1, base em yb) deslocada 3 px para a direita e 2 para baixo; um tom só, borda dura.
+  const sombraCaixa = (ctx, x0, x1, yb, prof = 6, a = .28) => { ctx.globalAlpha = a; ctx.fillStyle = COR_SOMBRA; ctx.fillRect(x0 + 3, yb - prof + 2, x1 - x0, prof); ctx.globalAlpha = 1; };
+  // Acabamento (regra 10.22): luz quente e fraca sobre o fundo estático pronto; só no canvas guardado, nunca por quadro.
+  const acabamento = (ctx, w, h) => { ctx.globalCompositeOperation = 'soft-light'; ctx.globalAlpha = .1; ctx.fillStyle = '#f0c070'; ctx.fillRect(0, 0, w, h); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; };
+  // O mesmo acabamento para um desenho que sai do fundo e passa a ser posto por quadro: cópia com a luz quente só onde há tinta.
+  function quente(img) {
+    const c = document.createElement('canvas'), x = c.getContext('2d'); c.width = img.width; c.height = img.height;
+    x.drawImage(img, 0, 0); acabamento(x, c.width, c.height); x.globalCompositeOperation = 'destination-in'; x.drawImage(img, 0, 0);
+    return Object.assign(c, { _r: img._r, lw: img.lw, lh: img.lh });
+  }
+  // Margem de lá (regra 10.17): só os tons de CHÃO vão um pouco para o céu; as árvores ficam fortes.
+  const GL = [GR[1], GR[2], GR[3], GR[4]].map(c => distante(c, .15)); // sombra, base, luz e ponta do capim
+  const ESTRADA = [AR[1], AR[2], AR[3]].map(c => distante(c, .15));
+  const TERRA = [T.brn[1], T.wood[0], T.wood[1]], TERRA_L = TERRA.map(c => distante(c, .1)); // barranco: pé na sombra, face, aresta de luz
+  const ESPUMA = tom(AG[5], 1.2), JUNCO = [T.dgrn[1], T.grn[1]], FLORES = [T.yel[2], T.wht[2], T.org[2]];
+  const flor = (px, x, y, cor, esc) => { px(x, y + .5, 1, .5, esc); px(x, y - .5, .5, 1, esc); px(x - .5, y - 1.5, 1, 1, cor); };
+  // Mata ao fundo (regras 10.18 e 10.20): só massa, um tom de luz no alto à esquerda, sem marcas de folha e sem contorno.
+  const MATA = [0, 1, 2].map(v => {
+    const s = new Spr(20, 12), cor = [FOLHA[1], FOLHA[2]].map(c => distante(c, .2));
+    [[5, 7, 4.5, 4], [14, 7.5, 5, 3.6], [9.5, 5.5, 5.5, 4.6]].forEach(([x, y, rx, ry], i) => {
+      x += Math.round(hash(v, i, 81) * 2 - 1); s.disc(x, y, rx, ry, cor[0]); s.rect(x - rx, y, rx * 2, 12 - y, cor[0]); s.disc(x - rx * .3, y - ry * .4, rx * .5, ry * .35, cor[1]);
+    });
+    return s.canvas();
+  });
   const CANOAS_X = 314, VAGA = 112, VAGA_RIO = 116;
-  const fundos = {};
-  function fundo(W, comMargem) {
-    const id = W + ':' + comMargem; if (fundos[id]) return fundos[id];
-    const velhos = Object.keys(fundos); if (velhos.length > 5) delete fundos[velhos[0]];
-    const c = document.createElement('canvas'); c.width = W; c.height = H; const b = c.getContext('2d');
-    const px = (x, y, w, h, cor) => { b.fillStyle = cor; b.fillRect(x, y, w, h); };
-    // margem de lá: gramado com capim e flores, estrada de chão e a horta cercada
-    dither(b, 0, 0, W, FAR, [GR[2], GR[1], GR[2], GR[3]]);
-    for (let i = 0; i < W * .9; i++) {
-      const x = Math.floor(az(i, 1) * W), y = 1 + Math.floor(az(i, 2) * (FAR - 5)), v = az(i, 3);
-      if (v < .5) { px(x, y, 1, 2, GR[0]); px(x + 1, y + 1, 1, 1, GR[0]); } else if (v < .88) { px(x, y, 1, 1, GR[4]); px(x + 1, y - 1, 1, 1, GR[4]); } else px(x, y, 1, 1, ['#ffe07a', '#ffffff', '#f2a0c0'][i % 3]);
-    }
-    for (let x = 0; x < W; x++) {
-      const y = 28 + Math.round(Math.sin(x * .03) * 4);
-      px(x, y, 1, 1, '#a8824e'); px(x, y + 1, 1, 4, '#d6b47e'); px(x, y + 5, 1, 1, '#a8824e');
-      if (x % 5 < 3) { px(x, y + 2, 1, 1, '#c8a36a'); px(x, y + 4, 1, 1, '#c8a36a'); }
-      if (az(x, 4) > .93) px(x, y + 1 + (x % 4), 1, 1, '#f0d8a8');
-    }
-    for (let j = 0; j < 4; j++) { px(124, 42 + j * 3, 30, 2, '#6e4a30'); for (let x = 125; x < 153; x += 3) px(x, 41 + j * 3, 2, 2, j == 1 ? T.red[2] : j % 2 ? GR[4] : T.grn[1]); }
-    px(121, 39, 36, 1, CASCA[1]); px(121, 54, 36, 1, CASCA[1]); for (let x = 121; x <= 156; x += 5) { px(x, 37, 1, 4, CASCA[2]); px(x, 52, 1, 4, CASCA[2]); }
-    // casa, árvores, arbustos e capivaras, de trás para a frente
-    const coisas = [{ y: CASA_Y + 40, f: () => { sombra(b, CASA_X + 30, CASA_Y + 40, 30, 5); b.drawImage(CASA, CASA_X, CASA_Y); } }];
+  // O que se mexe na margem de lá fica fora do fundo guardado. plantar(W) dá a lista de trás para a frente (mesmas posições e sementes
+  // de antes), com a casa no meio para manter a ordem de profundidade: s(ctx) pinta a sombra de cada um no fundo, q(t) escolhe o quadro.
+  const RAJADA = [0, 0, 0, 0, 0, 0, 1, 2, 2, 2, 1, 0]; // uma rajada a cada 5 s, que atravessa a cena da esquerda para a direita
+  const rajada = (x, fase) => t => RAJADA[((Math.floor(t * 2.5 - x * .02 + fase * 3) % 12) + 12) % 12];
+  const plantas = {};
+  function plantar(W) {
+    if (plantas[W]) return plantas[W];
+    const velhos = Object.keys(plantas); if (velhos.length > 5) delete plantas[velhos[0]];
+    const itens = [{ casa: true, y: CASA_Y + 40, s: b => sombraCaixa(b, CASA_X + 4, CASA_X + 50, CASA_Y + 40) }];
     for (let x = 4, k = 0; x < W; x += 26 + Math.floor(az(k, 5) * 26), k++) {
       if (x > 30 && x < 160) continue;
-      const v = az(k, 6), img = ARVORES[v < .24 ? 0 : v < .46 ? 1 : v < .62 ? 2 : v < .76 ? 3 : v < .9 ? 4 : 5], base = 48 + Math.floor(az(k, 7) * 10), xx = x;
-      coisas.push({ y: base, f: () => { sombra(b, xx + img.width / 2 + 4, base, img.width * .36, 3.5); b.drawImage(img, xx, base - img.height); } });
+      const v = az(k, 6), img = ARVORES[v < .24 ? 0 : v < .46 ? 1 : v < .62 ? 2 : v < .76 ? 3 : v < .9 ? 4 : 5], base = 48 + Math.floor(az(k, 7) * 10), xx = x, kk = k;
+      itens.push({ img, x, y: base, yd: base - img.lh, q: rajada(x, az(k, 36)), s: b => { if (img.petala) tapete(b, xx + img.lw / 2 + 4, base, img.lw * .55, 4, img.petala, kk); sombra(b, xx + img.lw / 2 + img.sdx, base, Math.min(8, img.srx), img.sry); } });
     }
     for (let x = 22, k = 0; x < W; x += 48 + Math.floor(az(k, 8) * 50), k++) {
       if (x > 50 && x < 160) continue;
       const img = ARBUSTOS[k % 3], base = 50 + Math.floor(az(k, 9) * 9), xx = x;
-      coisas.push({ y: base, f: () => { sombra(b, xx + 8, base, 8, 2); b.drawImage(img, xx, base - 10); } });
+      itens.push({ img, x, y: base, yd: base - 10, q: rajada(x, az(k, 37)), s: b => sombra(b, xx + 9, base, img.srx, img.sry) });
     }
-    [.42, .47, .83].forEach((f, i) => { const xx = Math.round(W * f) + i * 9; coisas.push({ y: 59, f: () => { sombra(b, xx + 7, 59, 7, 1.5); b.drawImage(CAPIVARA, xx, 50 - (i % 2)); } }); });
-    coisas.sort((p, q) => p.y - q.y).forEach(o => o.f());
-    // barranco de terra com a grama pendendo
-    for (let x = 0; x < W; x++) {
-      px(x, FAR, 1, 4, '#7a5434'); px(x, FAR, 1, 1, '#96694a');
-      if (az(x, 10) > .55) px(x, FAR + 1 + Math.floor(az(x, 11) * 3), 1, 1, '#5a3a24');
-      if (az(x, 12) > .94) px(x, FAR + 2, 2, 1, '#b9a088');
-      px(x, FAR - 1, 1, 1 + (az(x, 13) > .5 ? 1 : 0) + (az(x, 14) > .88 ? 1 : 0), GR[1]);
+    [.42, .47, .83].forEach((f, i) => { // capivaras: abanam a orelha duas vezes e baixam a cabeça de vez em quando, cada uma no seu tempo
+      const xx = Math.round(W * f) + i * 9, yy = 50 - (i % 2);
+      itens.push({ img: CAPIVARA, x: xx, y: 59, yd: yy, q: t => { const k = (t * .13 + i * .37) % 1; return k < .03 || (k > .06 && k < .09) ? 1 : k > .5 && k < .62 ? 2 : 0; }, s: b => sombra(b, xx + 8, yy + 9.5, 6, 1.5) });
+    });
+    itens.sort((p, q) => p.y - q.y);
+    const taboas = []; for (let k = 0, x = 40; x < W; x += 70 + Math.floor(az(k, 22) * 80), k++) taboas.push({ x, k });
+    return plantas[W] = { itens, taboas, garca: Math.round(W * .64) };
+  }
+  // Moita de taboa em três quadros: hastes de 1 px fino a cada 2, alturas desiguais e dois verdes alternados; reta, com o alto
+  // deitado 1 px fino para a direita, e com quase a haste toda. O pé fica onde está.
+  const moitas = [];
+  const taboa = k => moitas[k] || (moitas[k] = [0, .4, .7].map(p => {
+    const c = tela(14, 10), b = hd(c.getContext('2d')), px = (x, y, w, h, cor) => { b.fillStyle = cor; b.fillRect(x, y, w, h); };
+    for (let i = 0; i < 12; i++) {
+      const hgt = 4 + Math.floor(az(k * 13 + i, 23) * 12) / 2, alto = Math.round(hgt * p * 2) / 2, d = alto ? .5 : 0;
+      px(i, 10 - hgt + alto, .5, hgt - alto, JUNCO[i % 2]); if (alto) px(i + .5, 10 - hgt, .5, alto, JUNCO[i % 2]);
+      if (i % 4 === 1) px(i + d, 10.5 - hgt, 1, 2, T.brn[1]);
     }
-    // rio: fundo perto do barranco, raso perto da areia, com veios de correnteza
-    dither(b, 0, FAR + 4, W, MARGEM - FAR - 4, [AG[0], AG[1], AG[2], AG[2], AG[3], AG[3], AG[4]]);
-    for (let x = 0; x < W; x++) if ((x + (az(x, 15) > .5 ? 1 : 0)) % 2) px(x, FAR + 4, 1, 2 + Math.floor(az(x, 16) * 3), '#173a55');
-    for (let i = 0; i < W * .2; i++) { const x = Math.floor(az(i, 17) * W), y = FAR + 14 + Math.floor(az(i, 18) * (MARGEM - FAR - 24)); px(x, y, 3 + Math.floor(az(i, 19) * 7), 1, y > 122 ? AG[5] : y > 96 ? AG[4] : AG[3]); }
-    for (let x = 0; x < W; x++) if (az(x, 20) > .45) px(x, MARGEM - 2 - Math.floor(az(x, 21) * 3), 1, 1, AG[5]);
-    for (let k = 0, x = 40; x < W; x += 70 + Math.floor(az(k, 22) * 80), k++) { // taboas e aguapés junto ao barranco
-      for (let i = 0; i < 6; i++) { const rx = x + i * 2 + (i % 2), hgt = 5 + Math.floor(az(k * 9 + i, 23) * 6); px(rx, FAR + 7 - hgt, 1, hgt, i % 2 ? '#5aa048' : '#2f6a3a'); if (i % 3 == 0) px(rx, FAR + 6 - hgt, 1, 3, '#6e4a30'); }
-      px(x - 1, FAR + 7, 14, 1, AG[3]);
-      for (let i = 0; i < 4; i++) { const lx = x + 18 + Math.floor(az(k * 7 + i, 24) * 22), ly = FAR + 9 + Math.floor(az(k * 7 + i, 25) * 8); px(lx, ly, 4, 2, '#3f8546'); px(lx, ly, 2, 1, '#8cc65e'); px(lx + 3, ly + 1, 1, 1, AG[1]); if (i == 1) px(lx + 1, ly - 1, 2, 1, '#f2a0c0'); }
+    return quente(c);
+  }));
+  // A casa é reposta a cada quadro, entre as árvores de trás e as da frente: cópia com a linha de contato, igual à que está no fundo.
+  const CASA_CHAO = [[4, 38, 16], [33, 38, 17], [21, 40, 12]]; let casaQ = null;
+  const casaViva = () => { if (!casaQ) { const c = tela(54, 42), b = hd(c.getContext('2d')); b.drawImage(CASA, 0, 0); contato(b, 0, 0, CASA_CHAO, GL[1]); casaQ = quente(c); } return casaQ; };
+  /** Põe por cima do fundo() o que se mexe na margem de lá. Quem desenha o fundo chama esta logo depois; com 'parado', sai o quadro 0 de tudo. */
+  function desenharArvores(ctx, W, t) {
+    const P = plantar(W), v = !parado;
+    P.itens.forEach(o => { if (o.casa) ctx.drawImage(casaViva(), CASA_X, CASA_Y); else ctx.drawImage(o.img.quadros()[v ? o.q(t) : 0], o.x, o.yd); });
+    P.taboas.forEach(o => { const s = v ? Math.sin(t * 1.1 - o.x * .03) : 0; ctx.drawImage(taboa(o.k)[s > .6 ? 2 : s > 0 ? 1 : 0], o.x, FAR - 3); });
+    const k = (t / 8) % 1; ctx.drawImage(GARCA.quadros()[v && k > .8 && k < .93 ? 1 : 0], P.garca, FAR - 7); // a garça baixa a cabeça de vez em quando
+  }
+  const fundos = {};
+  function fundo(W, comMargem) {
+    const id = W + ':' + comMargem; if (fundos[id]) return fundos[id];
+    const velhos = Object.keys(fundos); if (velhos.length > 5) delete fundos[velhos[0]];
+    const c = tela(W, H), b = hd(c.getContext('2d'));
+    const px = (x, y, w, h, cor) => { b.fillStyle = cor; b.fillRect(x, y, w, h); };
+    const yEstrada = x => 28 + Math.round(Math.sin(x * .03) * 4), topoGrama = x => 208 + Math.round(Math.sin(x * .21) * 1.5 + suave(x, 0, 3, 9) * 2);
+    // Zona de silêncio (regra 10.8): menos marcas na linha d'água, em volta do trapiche, onde as canoas ficam na areia e na frente das barracas.
+    const calma = (x, y) => y > MARGEM - 7 && y < MARGEM + 9 ? .15 : y < MARGEM ? 1 : x > 258 && x < 304 ? .1 : x >= 304 && y < 186 ? .4 : x < 266 && y > 196 ? .3 : 1;
+    // O chão inteiro numa passada: gramado de lá com a estrada, barranco, rio em faixas, areia e a grama de cá.
+    const PAL = [GL[0], GL[1], GL[2], ...ESTRADA, ...TERRA_L, ...AG, ...AR, GR[1], GR[2], GR[3]], iE = 3, iT = 6, iA = 9, iS = 15, iG = 20;
+    chao(b, 0, 0, W, H, PAL, (x, y) => {
+      if (y < FAR - 1) { // estrada de chão: beira de cima na sombra e dois sulcos quebrados
+        const dy = y - yEstrada(x); if (dy < 0 || dy > 5) return gramaTom(x, y, .7);
+        return iE + (dy === 0 || ((dy === 2 || dy === 4) && suave(x, dy * 9, 6, 10) > .6) ? 0 : 1);
+      }
+      if (y < FAR + 4) { // barranco: grama pendendo, aresta de luz, terra com torrões e o pé na sombra
+        const o = suave(x, 0, 2.5, 13), dy = y - FAR + 1;
+        return dy <= (o > .82 ? 2 : o > .45 ? 1 : 0) ? 0 : dy === 1 ? iT + 2 : dy === 4 ? iT : iT + (suave(x, y * 3, 4, 14) > .68 ? 0 : 1);
+      }
+      if (y < MARGEM) return iA + (y - FAR - 4 < (suave(x, 0, 4, 15) > .5 ? 2 : 1) ? 1 : aguaTom(x, y, FAR + 4, MARGEM)); // sombra do barranco na água, depois o rio
+      const top = topoGrama(x);
+      if (y < top) return iS + areiaTom(x, y, y - MARGEM, calma(x, y));
+      return y === top ? iG + 2 : iG + gramaTom(x, y, 1.5);
+    });
+    // margem de lá: mata ao fundo, capim em tufos (menores e mais ralos no alto), flores raras, pedrinhas da estrada e a horta cercada
+    for (let x = -6, k = 0; x < W; x += 11 + Math.floor(az(k, 80) * 7), k++) { const y = Math.floor(az(k, 81) * 4) - 2; b.drawImage(MATA[k % 3], x, y); px(x + 1, y + 12, 19, .5, GL[0]); }
+    for (let i = 0; i < W * 1.1; i++) {
+      const x = Math.floor(az(i, 1) * W * 2) / 2, y = 14 + Math.floor(az(i, 2) * (FAR - 18) * 2) / 2, dy = y - yEstrada(Math.round(x));
+      if ((dy > -3 && dy < 8) || (x > 117 && x < 160 && y > 34 && y < 59)) continue;
+      if (az(i, 3) > (suave(x, y, 22, 2) > .52 ? 1 : .15) * (.4 + .6 * y / FAR)) continue; // agrupados em manchas
+      if (i % 19 === 0) flor(px, x, y, FLORES[i % 3], GL[0]); else capim(px, x, y, 3, y > 40 ? 4 : 3, GL[0], GL[3]);
     }
-    for (let k = 0, x = 110; x < W; x += 150 + Math.floor(az(k, 26) * 120), k++) { const y = FAR + 5 + (k % 2) * 3; b.drawImage(PEDRA, x, y); px(x - 1, y + 6, 3, 1, '#cfeeff'); px(x + 8, y + 5, 3, 1, '#cfeeff'); }
-    b.drawImage(GARCA, Math.round(W * .64), FAR - 7);
-    // areia: molhada junto à água, com seixos, conchas e capim; gramado na borda de baixo
-    dither(b, 0, MARGEM, W, H - MARGEM, [AR[1], AR[2], AR[3], AR[3], AR[4], AR[3]]);
-    for (let x = 0; x < W; x++) { const hgt = 3 + Math.round(Math.sin(x * .09) + az(x, 27)); px(x, MARGEM, 1, hgt, AR[0]); if (az(x, 28) > .5) px(x, MARGEM + hgt, 1, 1, AR[1]); }
-    for (let i = 0; i < W * .45; i++) {
-      const x = Math.floor(az(i, 29) * W), y = MARGEM + 9 + Math.floor(az(i, 30) * (H - MARGEM - 22)), v = az(i, 31);
-      if (v < .45) { px(x, y, 2, 1, '#b79a6a'); px(x, y + 1, 2, 1, AR[0]); } else if (v < .58) { px(x, y, 1, 1, '#fff8e4'); px(x + 1, y, 1, 1, '#e8b0a0'); }
-      else if (v < .74) { px(x, y, 1, 2, GR[2]); px(x + 1, y - 1, 1, 3, GR[3]); px(x + 2, y, 1, 2, GR[1]); } else px(x, y, 1, 1, AR[4]);
+    for (let i = 0; i < W * .06; i++) { const x = Math.floor(az(i, 60) * W), y = yEstrada(x) + 1 + Math.floor(az(i, 61) * 4); px(x, y, 1, .5, ESTRADA[2]); px(x + .5, y + .5, 1, .5, ESTRADA[0]); }
+    for (let j = 0; j < 4; j++) { // canteiros: terra com a beira de cima na luz e as plantas em blocos de dois tons
+      px(124, 42 + j * 3, 30, 2, T.brn[1]); px(124, 42 + j * 3, 30, .5, T.wood[0]);
+      for (let x = 125; x < 153; x += 3) { const t = j == 1 ? T.red : T.grn; px(x, 41 + j * 3, 2, 2, t[1]); px(x, 41 + j * 3, 1, 1, t[2]); px(x + 1, 42 + j * 3, 1, 1, t[0]); }
     }
-    for (let x = 0; x < W; x++) {
-      const top = 208 + Math.round(Math.sin(x * .21) * 1.5 + az(x, 32) * 2);
-      px(x, top, 1, H - top, GR[2]); px(x, top, 1, 1, GR[4]);
-      if (az(x, 33) > .6) px(x, top + 2 + Math.floor(az(x, 34) * 4), 1, 2, GR[0]);
-      if (az(x, 35) > .93) px(x, top + 1, 1, 1, x % 2 ? '#ffe07a' : '#ffffff');
+    px(122, 55, 36, .5, GL[0]); px(121, 39, 36, 1, CASCA[1]); px(121, 54, 36, 1, CASCA[1]); for (let x = 121; x <= 156; x += 5) { px(x, 37, 1, 4, CASCA[2]); px(x, 52, 1, 4, CASCA[2]); }
+    // casa, árvores, arbustos e capivaras: primeiro todas as sombras (para a direita e para baixo, nunca por cima de outro desenho), depois os desenhos de trás para a frente
+    // (as árvores, os arbustos, as capivaras, a taboa e a garça se mexem: quem os desenha é desenharArvores, a cada quadro; aqui ficam as sombras, o tapete de pétalas e a casa)
+    plantar(W).itens.forEach(o => o.s(b));
+    b.drawImage(CASA, CASA_X, CASA_Y); contato(b, CASA_X, CASA_Y, CASA_CHAO, GL[1]);
+    // beira do barranco: sombra da taboa na água; aguapés em disco achatado com a sombra na cor escura da água e um disco claro deslocado para a luz
+    for (let k = 0, x = 40; x < W; x += 70 + Math.floor(az(k, 22) * 80), k++) {
+      px(x, FAR + 7, 12.5, .5, AG[1]); px(x + 1.5, FAR + 8, 9, .5, AG[1]);
+      for (let i = 0; i < 4; i++) {
+        const lx = x + 20 + Math.floor(az(k * 7 + i, 24) * 22), ly = FAR + 10 + Math.floor(az(k * 7 + i, 25) * 8);
+        disco(b, lx + .5, ly + .5, 2.5, 1, AG[1]); disco(b, lx, ly, 2.5, 1, T.grn[1]); disco(b, lx - .5, ly - .5, 1.5, .5, T.grn[2]);
+        if (i == 1) { px(lx, ly - 1.5, 1, 1, T.wht[2]); px(lx + .5, ly - 1, .5, .5, T.yel[1]); }
+      }
     }
-    if (comMargem) {
-      ESTRUTURAS.forEach(e => {
-        if (!e.aba) return; // o trapiche é desenhado depois da água (desenharTrapiche), para a espuma não passar por cima
-        sombra(b, e.x + e.w / 2, e.y + e.h - 2, e.w / 2, 4);
-        if (e.aba === 'tecnico') { b.drawImage(ESCRITORIO, e.x, e.y); if (LOGO_P.complete) b.drawImage(LOGO_P, e.x + 25, e.y + 5); return; }
-        b.drawImage(BARRACA(e.cor), e.x, e.y); b.drawImage(e.ic(), e.x + 10, e.y + 14);
+    for (let k = 0, x = 110; x < W; x += 150 + Math.floor(az(k, 26) * 120), k++) { const y = FAR + 5 + (k % 2) * 3; disco(b, x + 5.5, y + 5.5, 4, 1, AG[1]); b.drawImage(PEDRA, x, y); px(x - 2, y + 5, 2, .5, AG[5]); px(x + 9.5, y + 4, 2, .5, AG[5]); }
+    { const x = Math.round(W * .64); disco(b, x + 6, FAR + 7.5, 3, .5, AG[1]); px(x + 1, FAR + 8.5, 2, .5, AG[5]); px(x + 8, FAR + 8, 2, .5, AG[5]); }
+    for (let i = 0; i < W * .05; i++) px(Math.floor(az(i, 17) * W), FAR + 14 + Math.floor(az(i, 18) * (MARGEM - FAR - 30)), 1, .5, ESPUMA); // brilho do sol: bem menos de 1% da água
+    // espuma: uma linha clara e quebrada entre a água e a areia (nada de linha escura)
+    for (let x = 0, k = 0; x < W; k++) { const len = 2 + Math.floor(az(k, 20) * 5); px(x, MARGEM - .5, len, .5, ESPUMA); if (az(k, 21) > .6) px(x + .5, MARGEM - 1, len - 1, .5, ESPUMA); x += len + 1 + Math.floor(az(k, 27) * 4); }
+    // areia: seixos e conchas com sombra à direita, capim e traços claros, em manchas; maiores perto da borda de baixo
+    for (let i = 0; i < W * .8; i++) {
+      const x = Math.floor(az(i, 29) * W * 2) / 2, y = MARGEM + 9 + Math.floor(az(i, 30) * (H - MARGEM - 22) * 2) / 2, v = az(i, 31), g = y > 184;
+      if (az(i, 28) > calma(x, y) * (suave(x, y, 20, 12) > .45 ? 1 : .2)) continue;
+      if (v < .45) { const w = g ? 2 : 1.5; px(x, y, w, .5, AR[4]); px(x, y + .5, w, .5, AR[2]); px(x + .5, y + 1, w, .5, AR[1]); }
+      else if (v < .6) { px(x, y, 1, .5, T.wht[2]); px(x, y + .5, 1, .5, T.crm[0]); px(x + .5, y + 1, 1, .5, AR[2]); }
+      else if (v < .8) capim(px, x, y, g ? 4 : 3, g ? 5 : 4, GR[1], GR[3]);
+      else px(x, y, 1.5, .5, AR[4]);
+    }
+    for (let x = 2, k = 0; x < W; x += 3 + Math.floor(az(k, 33) * 6), k++) { // grama de cá: tufos maiores, porque estão mais perto
+      const y = topoGrama(x) + 3 + Math.floor(az(k, 34) * 3), v = az(k, 35);
+      if (v < .45) capim(px, x, y, 5, 5 + (k % 2), GR[0], GR[4]); else if (v > .95) flor(px, x, y, FLORES[k % 3], GR[0]);
+    }
+    if (comMargem) { // sombras antes de todas as construções; o trapiche é desenhado depois da água (desenharTrapiche), para a espuma não passar por cima
+      const ests = ESTRUTURAS.filter(e => e.aba);
+      ests.forEach(e => e.aba === 'tecnico' ? sombraCaixa(b, e.x + 4, e.x + 70, e.y + 50, 8, .24) : sombraCaixa(b, e.x + 2, e.x + 42, e.y + 44, 6, .24));
+      sombra(b, 284, 197.5, 13, 2, .24);
+      ests.forEach(e => {
+        if (e.aba === 'tecnico') { b.drawImage(ESCRITORIO, e.x, e.y); if (LOGO_P.complete) b.drawImage(LOGO_P, e.x + 25, e.y + 5); contato(b, e.x, e.y, [[4, 50, 22], [47, 50, 23], [27, 52, 1], [45, 52, 2], [29, 53, 16]], AR[3]); return; }
+        b.drawImage(BARRACA(e.cor), e.x, e.y); b.drawImage(e.ic(), e.x + 10, e.y + 14); contato(b, e.x, e.y, [[3, 44, 2], [39, 44, 2], [2, 42, 0], [6, 42, 32], [41, 42, 1]], AR[3]);
       });
-      sombra(b, 282, 197, 15, 3); b.drawImage(TRALHA, 266, 182);
+      b.drawImage(TRALHA, 266, 182); contato(b, 266, 182, [[1, 15, 10], [13, 15.5, 6], [22, 15, 7]], AR[3]);
     }
+    acabamento(b, W, H);
     return fundos[id] = c;
   }
   function desenharTrapiche(ctx) {
-    const e = ESTRUTURAS[ESTRUTURAS.length - 1], px = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
-    ctx.globalAlpha = .28; px(e.x + 3, e.y + 4, e.w + 2, MARGEM - e.y - 2, '#10202a'); ctx.globalAlpha = 1; // sombra na água
-    for (let y = e.y, k = 0; y < e.y + e.h; y += 3, k++) { // tábuas com emendas e pregos
-      px(e.x, y, e.w, 3, k % 2 ? '#a06a40' : '#8f5c36'); px(e.x, y, e.w, 1, k % 2 ? '#bd8550' : '#a87044'); px(e.x, y + 2, e.w, 1, '#5a3622');
-      px(e.x + 6 + (k * 7) % 18, y, 1, 2, '#5a3622'); px(e.x + 2, y + 1, 1, 1, '#3a2418'); px(e.x + e.w - 3, y + 1, 1, 1, '#3a2418');
-    }
-    px(e.x - 1, e.y - 1, e.w + 2, 1, OL); px(e.x - 1, e.y, 1, e.h + 3, OL); px(e.x + e.w, e.y, 1, e.h + 3, OL); px(e.x, e.y + e.h, e.w, 3, '#4a2c1c'); px(e.x - 1, e.y + e.h + 3, e.w + 2, 1, OL);
-    [e.y - 3, e.y + 22, e.y + e.h - 4].forEach(y => [e.x - 2, e.x + e.w - 2].forEach(x => { px(x - 1, y - 1, 6, 9, OL); px(x, y, 4, 7, '#6e4a30'); px(x, y, 4, 2, '#96694a'); px(x, y, 1, 7, '#96694a'); }));
+    const e = ESTRUTURAS[ESTRUTURAS.length - 1], xs = e.x + e.w + 2.5;
+    ctx.fillStyle = AG[0]; for (let y = e.y + 2, k = 0; y < MARGEM; y += 1.5, k++) ctx.fillRect(xs + (k % 2), y, 3, 1); // sombra na água: o tom escuro da própria água, em tiras
+    ctx.globalAlpha = .24; ctx.fillStyle = COR_SOMBRA; ctx.fillRect(xs, MARGEM + 4, 2, e.y + e.h - MARGEM - 1); ctx.globalAlpha = 1; // na areia: faixa dura à direita
+    ctx.drawImage(TRAPICHE, e.x - 3, e.y - 4);
+    contato(ctx, e.x, e.y, [[-2, e.h + 3, e.w + 4]], AR[3]);
   }
   const RISCOS = Array.from({ length: 90 }, (_, i) => ({ x: (i * 97) % 1000, y: FAR + 7 + (i * 37) % (MARGEM - FAR - 12), len: 2 + (i % 5) * 2, ph: i * 1.7, sp: 6 + (i % 4) * 3 }));
 
+  const som = n => { if (window.TRILHA && TRILHA.sfx) TRILHA.sfx(n); }; let peixeSom = -1; // efeitos sonoros ligados à animação
+  const BRILHOS = Array.from({ length: 70 }, (_, i) => ({ x: (i * 173) % 1200, y: FAR + 9 + (i * 59) % (MARGEM - FAR - 16), ph: (i * .37) % 1, v: .35 + (i % 5) * .08 }));
+  const meio = v => Math.round(v * 2) / 2; // posição na grade fina: o movimento anda de meio em meio pixel lógico
+
   function desenharBarco(ctx, b, x, cy, t, naAgua) {
-    const g = b.g, bob = naAgua && !parado ? Math.round(Math.sin(t * 2.2 + x * .05) * .8) : 0, top = cy - CY + bob;
-    sombra(ctx, x + g.x0 + g.h.L / 2 + 3, cy + g.h.hw + (naAgua ? 4 : 3), g.h.L / 2, naAgua ? g.h.hw * .7 : 3, naAgua ? .25 : .2);
-    ctx.drawImage(b.img, x, top);
-    if (naAgua) { ctx.globalAlpha = .7; ctx.drawImage(b.sub, x, top); ctx.globalAlpha = 1; }
+    const g = b.g, viva = naAgua && !parado, bob = viva ? meio(Math.sin(t * 2.2 + x * .05) * .8) : 0, top = cy - CY + bob;
+    if (!naAgua) sombra(ctx, x + g.x0 + g.h.L / 2 + 3, cy + g.h.hw + 3, g.h.L / 2, 3, .24); // na areia, sombra dura; na água a sombra é o reflexo (regra 5.4)
+    ctx.drawImage(b.img, x, top); camadas(ctx, b, x, top, t, !parado);
+    if (naAgua) { // linha d'água, água escura e reflexo, por cima do costado submerso; no rio da cena o reflexo para na beira da areia
+      const alt = cy <= MARGEM + 4 ? Math.min(BH, MARGEM - top) : BH; if (alt > 0) ctx.drawImage(b.sub, 0, 0, BW, alt, x, top, BW, alt);
+    }
     if (b.fer) ctx.drawImage(b.fer, x, top);
+    if (!viva) return;
+    // Marolas: a água bate no costado de cá e abre em anéis na proa e na popa.
+    const x0 = x + g.x0, L = g.h.L; ctx.fillStyle = AG[5];
+    for (let i = 4; i < L - 5; i += 5) {
+      const k = Math.sin(t * 3 + i * .9 + x * .1); if (k <= .1) continue;
+      const u = i / L * 2 - 1, c = Math.max(0, 1 - u * u); ctx.globalAlpha = .3 + k * .4;
+      ctx.fillRect(x0 + i, meio(cy + g.h.hw * Math.pow(c, .55) + g.h.d * Math.sqrt(c) * .8 + bob), 2.5, .5);
+    }
+    for (let r = 0; r < 2; r++) {
+      const k = (t * .5 + r * .5 + x * .013) % 1, d = 2 + k * 7; ctx.globalAlpha = .5 * (1 - k);
+      [x0 - d, x0 + L + d - 2].forEach(ex => { ctx.fillRect(meio(ex), meio(cy + 1 - k * 2), 2, .5); ctx.fillRect(meio(ex), meio(cy + g.h.hw * .6 + 2 + k * 2), 2, .5); });
+    }
+    ctx.globalAlpha = 1;
   }
   function desenharAgua(ctx, W, t, semTelhado) {
+    if (parado) t = 0; // riscos e espuma da beira no quadro 0, qualquer que seja o chamador
     ctx.fillStyle = '#e8f8ff';
-    RISCOS.forEach(s => { if (s.x > W) return; if (Math.sin(t * 1.3 + s.ph) > 0) { ctx.globalAlpha = .55; ctx.fillRect(Math.round((s.x + t * s.sp) % (W + 20)) - 10, s.y, s.len, 1); } });
-    ctx.globalAlpha = .8; for (let x = 0; x < W; x += 3) { if (Math.sin(t * 2 + x * .4) > .2) ctx.fillRect(x, FAR + 4, 2, 1); if (Math.sin(t * 2.4 + x * .3) > .1 && (!semTelhado || x > 78)) ctx.fillRect(x, MARGEM - 1 + Math.round(Math.sin(t * 1.5 + x * .1)), 3, 1); }
+    if (!parado) {
+      ctx.globalAlpha = .13; // faixas de onda que descem o rio ondulando
+      for (let b = 0; b < 5; b++) { const yb = FAR + 16 + b * 15; for (let x = 0; x < W; x += 2) if (Math.sin(x * .07 - t * (.8 + b * .13) + b * 2) > .55) ctx.fillRect(x, yb + meio(Math.sin(x * .03 - t * .5 + b) * 1.5), 2, .5); }
+      BRILHOS.forEach(s => { // brilhos do sol: acendem em ponto, abrem em cruz e apagam
+        if (s.x > W) return; const k = (t * s.v + s.ph) % 1; if (k > .36) return;
+        const a = Math.sin(k / .36 * Math.PI); ctx.globalAlpha = .9 * a; ctx.fillRect(s.x, s.y, .5, .5);
+        if (a > .6) { ctx.fillRect(s.x - .5, s.y, 1.5, .5); ctx.fillRect(s.x, s.y - .5, .5, 1.5); }
+        if (a > .93) { ctx.fillRect(s.x - 1, s.y, 2.5, .5); ctx.fillRect(s.x, s.y - 1, .5, 2.5); }
+      });
+    }
+    RISCOS.forEach(s => { if (s.x > W) return; if (Math.sin(t * 1.3 + s.ph) > 0) { ctx.globalAlpha = .55; const x = meio((s.x + t * s.sp) % (W + 20)) - 10; ctx.fillRect(x, s.y, s.len, .5); ctx.fillRect(x + 1, s.y + .5, Math.max(1, s.len - 2.5), .5); } });
+    ctx.globalAlpha = .8; for (let x = 0; x < W; x += 3) { if (Math.sin(t * 2 + x * .4) > .2) { ctx.fillRect(x, FAR + 4, 2, .5); ctx.fillRect(x + .5, FAR + 4.5, 1, .5); } if (Math.sin(t * 2.4 + x * .3) > .1 && (!semTelhado || x > 78)) { const y = MARGEM - 1 + meio(Math.sin(t * 1.5 + x * .1)); ctx.fillRect(x, y, 3, .5); ctx.fillRect(x + .5, y + .5, 1.5, .5); } }
     ctx.globalAlpha = 1;
   }
 
-  // Só enfeite, nada de dado: fumaça da chaminé e um peixe que salta de vez em quando; os passarinhos vão por cima de tudo.
+  // Só enfeite, nada de dado: fumaça da chaminé, borboletas na margem de lá e um peixe que salta de vez em quando; os passarinhos vão por cima de tudo.
+  const BORBOLETAS = [[T.yel[2], T.yel[0]], [tom(PUB_CORES[1], 1), tom(PUB_CORES[1], -1)], [T.wht[2], T.wht[0]]]; // asa na luz e asa na sombra
   function desenharVida(ctx, W, t) {
     if (parado) return;
-    const px = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), w, h); };
-    for (let i = 0; i < 4; i++) { const k = (t * .3 + i / 4) % 1; ctx.globalAlpha = .75 * (1 - k); px(CASA_X + 40 + Math.sin(k * 5 + i) * 2 + k * 6, CASA_Y - k * 12, k > .5 ? 3 : 2, 2, '#f4f4f0'); }
+    const px = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(meio(x), meio(y), w, h); };
+    for (let i = 0; i < 6; i++) { // fumaça: baforadas que crescem, clareiam e derivam com o vento
+      const k = (t * .22 + i / 6) % 1, x = CASA_X + 40.5 + Math.sin(k * 5 + i) * 1.5 + k * k * 12, y = CASA_Y - k * 16, r = meio(1 + k * 2.2);
+      ctx.globalAlpha = .7 * (1 - k); px(x - r, y - r / 2, r * 2, r, T.wht[2]); px(x - r / 2, y - r, r, r * 2, T.wht[2]); px(x - r / 2, y + r / 2, r, .5, T.wht[1]);
+    }
+    BORBOLETAS.forEach(([cor, som], i) => { // borboletas: voo em laços, asas abrindo e fechando
+      const x = W * (.2 + .3 * i) + Math.sin(t * .7 + i * 2) * 14 + Math.sin(t * 1.9 + i) * 4, y = 14 + i * 9 + Math.cos(t * .9 + i) * 6 + Math.sin(t * 2.3 + i) * 2, aberta = Math.sin(t * 14 + i * 2) > 0;
+      ctx.globalAlpha = 1; if (aberta) { px(x - 1, y, 1, 1, cor); px(x + .5, y, 1, 1, cor); px(x - 1, y + .5, .5, .5, som); px(x + 1, y + .5, .5, .5, som); } else { px(x - .5, y - .5, .5, 1.5, cor); px(x + .5, y - .5, .5, 1.5, som); }
+      px(x, y, .5, 1, T.brn[0]);
+    });
     ctx.globalAlpha = 1;
-    const ciclo = Math.floor(t / 6), k = (t % 6) / .8;
-    if (k < 1) {
-      const fx = 40 + az(ciclo, 40) * (W - 80) + k * 9, fy = 84 + az(ciclo, 41) * 40, alt = Math.sin(k * Math.PI) * 9;
-      px(fx, fy - alt, 3, 2, '#d0e6f5'); px(fx + 1, fy - alt, 2, 1, '#ffffff'); px(fx - 1, fy - alt + (k < .5 ? 1 : -1), 1, 2, '#7aa0c0');
-      if (k < .25 || k > .8) { px(fx - 3, fy, 2, 1, '#e8f8ff'); px(fx + 4, fy, 2, 1, '#e8f8ff'); px(fx, fy + 1, 3, 1, '#e8f8ff'); }
+    const ciclo = Math.floor(t / 6), k = (t % 6) / .8; if (k < .2 && ciclo !== peixeSom) { peixeSom = ciclo; som('pingo'); }
+    const fx0 = 40 + az(ciclo, 40) * (W - 80), fy = 84 + az(ciclo, 41) * 40;
+    if (k < 1) { // o peixe sai da água, faz o arco e mergulha de cabeça
+      const fx = fx0 + k * 9, alt = Math.sin(k * Math.PI) * 9, sobe = k < .5;
+      px(fx, fy - alt, 3, 1.5, T.fish[2]); px(fx + .5, fy - alt, 2, .5, tom(T.fish[2], 1)); px(fx + (sobe ? 2.5 : 3), fy - alt + (sobe ? -.5 : 1), .5, .5, OL);
+      px(fx - 1, fy - alt + (sobe ? 1 : -.5), 1, 1, T.fish[1]); px(fx - 1.5, fy - alt + (sobe ? 1.5 : -1), .5, 1, T.fish[1]);
+      if (k < .25) { px(fx0 - 2, fy, 1.5, .5, ESPUMA); px(fx0 + 3, fy, 1.5, .5, ESPUMA); px(fx0 + .5, fy - 1 - k * 6, .5, 1, ESPUMA); }
+    } else if (k < 2) { // anéis abrindo onde ele caiu
+      const a = k - 1, r = 2 + a * 8; ctx.globalAlpha = .8 * (1 - a);
+      [r, r * .55].forEach(q => { px(fx0 + 9 - q, fy, 2, .5, ESPUMA); px(fx0 + 9 + q, fy, 2, .5, ESPUMA); px(fx0 + 9 - q * .6, fy - q * .3, q * 1.2, .5, ESPUMA); px(fx0 + 9 - q * .6, fy + q * .3, q * 1.2, .5, ESPUMA); });
+      ctx.globalAlpha = 1;
     }
   }
   function desenharAves(ctx, W, t) {
-    for (let i = 0; i < 3; i++) {
-      const bx = Math.round(((i * 140 + t * 18) % (W + 60)) - 30), by = 20 + i * 50 + Math.round(Math.sin(t + i) * 3), up = Math.sin(t * 8 + i) > 0;
-      ctx.globalAlpha = .2; ctx.fillStyle = '#10202a'; ctx.fillRect(bx - 1, by + 12, 4, 1); ctx.globalAlpha = 1;
-      ctx.fillStyle = '#f4f4f0'; ctx.fillRect(bx, by, 2, 1); ctx.fillRect(bx - 2, by + (up ? -1 : 1), 2, 1); ctx.fillRect(bx + 2, by + (up ? -1 : 1), 2, 1); ctx.fillStyle = '#e0ac34'; ctx.fillRect(bx + 2, by, 1, 1);
+    if (parado) t = 0; // quadro parado igual ao do site, qualquer que seja o chamador
+    for (let i = 0; i < 3; i++) { // passarinhos: batida de asa em seis tempos, com planeio
+      const bx = meio(((i * 140 + t * 18) % (W + 60)) - 30), by = 20 + i * 50 + meio(Math.sin(t + i) * 3), asa = parado ? 0 : [-1.5, -1, 0, 1, .5, -.5][Math.floor(t * 10 + i * 1.3) % 6];
+      ctx.globalAlpha = .2; ctx.fillStyle = COR_SOMBRA; ctx.fillRect(bx - 1.5, by + 12, 5, 1); ctx.globalAlpha = 1;
+      ctx.fillStyle = '#f4f4f0'; ctx.fillRect(bx - .5, by, 3, 1); ctx.fillRect(bx + 2, by - .5, 1, 1); ctx.fillRect(bx - 1.5, by + .5, 1, .5);
+      const ab = (asa + 1.5) / 2; // 0 = asas recolhidas junto ao corpo; 1,25 = abertas, uma para cada lado
+      [-1, 1].forEach(l => { ctx.fillStyle = l < 0 ? '#f4f4f0' : '#c9d2dc'; ctx.fillRect(bx + .5, by + (l > 0 ? 1 + meio(ab * .5) : -.5 - meio(ab * .5)), 2, .5); ctx.fillRect(bx - .5, by + (l > 0 ? 1.5 + meio(ab) : -1 - meio(ab)), 1.5, .5); });
+      ctx.fillStyle = '#e0ac34'; ctx.fillRect(bx + 3, by, .5, .5); ctx.fillStyle = OL; ctx.fillRect(bx + 2.5, by - .5, .5, .5);
     }
   }
 
@@ -1146,7 +1771,23 @@ window.RIO = (function () {
       requestAnimationFrame(() => { ativos.forEach(o => { if (!o.canvas.isConnected) ativos.delete(o); }); if (r.canvas.getClientRects().length) r.desenhar(0, 1); });
       return;
     } if (!rodando) { rodando = true; ultimo = 0; requestAnimationFrame(quadro); } }
-  function escala(host, W) { return Math.max(1, Math.min(3, Math.floor((host.clientWidth || 800) / Math.min(W, 420)))); }
+  // Escala nítida: cada pixel da arte ocupa um número inteiro de pixels do aparelho. O zoom do Windows (125%, 150%) e o do
+  // navegador deixam o devicePixelRatio fracionário; com escala quebrada, uns pixels da arte saem mais largos que os outros.
+  // teto: a maior escala em px de CSS que cabe; modo true arredonda para cima (fundo que precisa cobrir a tela) e
+  // 'perto' vai ao inteiro mais próximo (quadros sem limite de altura, como os braços do painel).
+  const dpr = () => window.devicePixelRatio || 1;
+  function nitida(teto, modo) { // devolve px de CSS por pixel lógico, com um número inteiro de pixels do aparelho por pixel fino
+    const d = dpr(), v = teto * d / HD; let n = modo === 'perto' ? Math.round(v) : modo ? Math.ceil(v - .001) : Math.floor(v + .001);
+    if (n < 1 || n * HD / d < .999) { // tela pequena: o menor inteiro que não encolhe a cena, se couber; senão a cena encolhe e o navegador suaviza
+      const m = Math.max(1, Math.ceil(d / HD - .001)); if (m * HD / d <= Math.max(1, teto) * 1.34) n = m; else return Math.max(1, Math.floor(teto * d + .001)) / d;
+    }
+    return n * HD / d;
+  }
+  // Pixel fino em número inteiro de pixels do aparelho: sem filtro. Fora disso (cena encolhida), o navegador faz a média.
+  const nitidez = (canvas, s) => { const k = s * dpr() / HD; canvas.style.imageRendering = k > .99 && Math.abs(k - Math.round(k)) < .01 ? 'pixelated' : 'auto'; };
+  // Ícones e logos de tamanho fixo no CSS usam --nit para também cair em pixels inteiros do aparelho.
+  const ajustarNit = () => document.documentElement.style.setProperty('--nit', Math.max(1, Math.round(dpr())) / dpr());
+  ajustarNit(); addEventListener('resize', ajustarNit);
 
   // ---------- cena da regional ----------
   const ESTAGIO = [0, 0, 1, 2, 3, 4];
@@ -1158,14 +1799,14 @@ window.RIO = (function () {
   function cena(host, d, cb) {
     // d: { arranjos: [{ chave, ativo, completo, falta, dica, nome, spec }], travado }
     const nInc = d.arranjos.filter(a => !a.completo).length, nComp = d.arranjos.length - nInc;
-    const s = Math.max(1, Math.min(escala(host, 420), Math.floor(innerHeight * .58 / H * 2) / 2)); // a cena ocupa até uns 58% da altura
+    const s = nitida(Math.max(1, Math.min(3, (host.clientWidth || 800) / 420, innerHeight * .58 / H))); // a cena ocupa até uns 58% da altura
     const W = Math.max(400, Math.floor(((host.clientWidth || 800) - 6) / s), CANOAS_X + nInc * VAGA + 16, nComp * VAGA_RIO + 24);
     let c = cenaAtual && cenaAtual.host === host && cenaAtual.W === W && cenaAtual.s === s && cenaAtual.canvas.isConnected ? cenaAtual : null;
     if (!c) {
       host.innerHTML = '';
       const rol = document.createElement('div'); rol.className = 'rio-rolagem';
       const caixa = document.createElement('div'); caixa.className = 'rio-caixa';
-      const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H; canvas.setAttribute('aria-hidden', 'true');
+      const canvas = tela(W, H); canvas.setAttribute('aria-hidden', 'true'); nitidez(canvas, s);
       const camada = document.createElement('div'); camada.className = 'rio-camada';
       caixa.append(canvas, camada); rol.append(caixa); host.append(rol);
       caixa.style.width = W * s + 'px'; caixa.style.height = H * s + 'px'; caixa.style.setProperty('--s', s); canvas.style.width = '100%'; canvas.style.height = '100%';
@@ -1203,7 +1844,7 @@ window.RIO = (function () {
         lancar.addEventListener('click', ev => { ev.stopPropagation(); const chave = alvo._a.chave; cb.lancar(alvo._a.ref); const novo = cenaAtual && cenaAtual.alvos[chave]; if (novo) novo.focus({ preventScroll: true }); });
         lancar.addEventListener('keydown', ev => ev.stopPropagation());
         alvo.append(lancar);
-        alvo.addEventListener('dragstart', ev => { arrastada = alvo._a; ev.dataTransfer.setData('text/plain', '{}'); ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setDragImage(barco(alvo._a.spec).img, BW / 2, CY); });
+        alvo.addEventListener('dragstart', ev => { arrastada = alvo._a; ev.dataTransfer.setData('text/plain', '{}'); ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setDragImage(barco(alvo._a.spec).foto(), BW / 2 * HD, CY * HD); });
         alvo.addEventListener('click', () => cb.selecionar(alvo._a.ref));
         alvo.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); cb.selecionar(alvo._a.ref); } });
         alvo.addEventListener('dragover', ev => { if (c.d.travado || (arrastada && !alvo._a.completo)) return; ev.preventDefault(); if (!arrastada) alvo.classList.add('sobre'); });
@@ -1219,20 +1860,21 @@ window.RIO = (function () {
     registrar(c);
   }
   function desenharCena(c, t, dt) {
-    const ctx = c.ctx, W = c.W; ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(fundo(W, true), 0, 0);
+    const ctx = hd(c.ctx), W = c.W;
+    ctx.drawImage(fundo(W, true), 0, 0); desenharArvores(ctx, W, t);
     desenharAgua(ctx, W, t, true);
     desenharVida(ctx, W, t);
     desenharTrapiche(ctx);
     const lista = c.d.arranjos.map(a => {
       const alvoP = a.completo ? 1 : 0; let p = anim[a.chave];
-      p = parado ? alvoP : p < alvoP ? Math.min(alvoP, p + dt * .6) : Math.max(alvoP, p - dt * .6); anim[a.chave] = p;
+      const antes = p; p = parado ? alvoP : p < alvoP ? Math.min(alvoP, p + dt * .6) : Math.max(alvoP, p - dt * .6); anim[a.chave] = p;
+      if (alvoP && p > antes) { if (antes === 0) som('arrasto'); if (antes < .4 && p >= .4) som('agua'); if (antes < 1 && p >= 1) som('zarpar'); } // o som acompanha a canoa
       // Duas etapas: até 40% a canoa sobe reto da areia até a beira (empurrada); depois navega até a vaga no rio.
       const suave = k => k * k * (3 - 2 * k), BEIRA = MARGEM - 14, k1 = Math.min(1, p / .4), k2 = Math.max(0, (p - .4) / .6);
       const x = Math.round(a.areia.x + (a.rio.x - a.areia.x) * suave(k2));
       const cy = Math.round(p <= .4 ? a.areia.cy + (BEIRA - a.areia.cy) * suave(k1) : BEIRA + (a.rio.cy - BEIRA) * suave(k2));
       // Regional concluída: as canoas do rio descem rio abaixo (para a direita) e saem; ao reabrir, voltam pela esquerda.
-      const sAlvo = c.d.partida && a.completo ? 1 : 0;
+      const sAlvo = c.d.partida && a.completo ? 1 : 0; if (sAlvo && sai[a.chave] === 0 && p >= 1 && !parado) som('concluir');
       let sv = sai[a.chave]; if (sv === undefined) sv = p >= 1 ? sAlvo : 0;
       if (p >= 1 || !sAlvo) sv = parado ? sAlvo : sv < sAlvo ? Math.min(sAlvo, sv + dt * .22) : Math.max(sAlvo, sv - dt * .22);
       sai[a.chave] = sv;
@@ -1249,8 +1891,8 @@ window.RIO = (function () {
         const g = o.b.g, meio = (o.empurrando ? o.x : o.a.areia.x) + g.x0 + g.h.L / 2, fundoCasco = o.cy + g.h.hw + g.h.d - 2;
         const naBeira = !o.empurrando || fundoCasco < MARGEM + 4, y = naBeira ? MARGEM + 2 : fundoCasco, n = Math.max(1, Math.min(3, o.a.spec.equipe));
         for (let i = 0; i < n; i++) {
-          const px = Math.round(meio - 6 + (i - (n - 1) / 2) * 16), q = naBeira ? 2 : (Math.floor(t * 6) + i) % 2;
-          sombra(ctx, px + 6, y + 17, 5, 1.5, .3); ctx.drawImage(EMPURRA[q][i], px, y);
+          const px = Math.round(meio - 6 + (i - (n - 1) / 2) * 16), q = naBeira ? 2 : parado ? 0 : EMPURRA_PASSO[(Math.floor(t * 8) + i) % 4];
+          sombra(ctx, px + 7, y + 17, 5, 1.5, .3); ctx.drawImage(EMPURRA[q][i], px, y);
         }
       }
       if (o.a.ativo) { const g = o.b.g, ax = o.x + g.x0 + g.h.L / 2, ay = o.cy - 34 + Math.round(Math.sin(t * 4) * 2); ctx.fillStyle = OL; ctx.fillRect(ax - 4, ay - 1, 9, 2); ctx.fillStyle = '#ffe07a'; for (let i = 0; i < 4; i++) ctx.fillRect(ax - 3 + i, ay + i, 7 - i * 2, 1); }
@@ -1263,12 +1905,12 @@ window.RIO = (function () {
   // ---------- tela de entrada: paisagem ao fundo ----------
   function fundoEntrada(canvas) {
     const demo = [[4, ['10020', '15200', '14950', '12100'], 4, 5, 6], [3, ['11600', '15406'], 3, 3, 4], [2, ['14700'], 2, 2, 0], [1, [], 1, 1, 0]];
-    const r = { canvas, fixo: true, W: 0 };
+    const r = { canvas, fixo: true, W: 0, s: 0 };
     r.desenhar = (t) => {
-      const s = Math.max(2, Math.ceil(innerHeight / H)), W = Math.ceil(innerWidth / s);
-      if (W !== r.W) { r.W = W; canvas.width = W; canvas.height = H; canvas.style.width = W * s + 'px'; canvas.style.height = H * s + 'px'; }
-      const ctx = canvas.getContext('2d'); ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(fundo(W, false), 0, 0); desenharAgua(ctx, W, t); desenharVida(ctx, W, t);
+      const s = nitida(Math.max(2, innerHeight / H), true), W = Math.ceil(innerWidth / s);
+      if (W !== r.W || s !== r.s) { r.W = W; r.s = s; canvas.width = W * HD; canvas.height = H * HD; canvas.style.width = W * s + 'px'; canvas.style.height = H * s + 'px'; nitidez(canvas, s); }
+      const ctx = hd(canvas.getContext('2d'));
+      ctx.drawImage(fundo(W, false), 0, 0); desenharArvores(ctx, W, t); desenharAgua(ctx, W, t); desenharVida(ctx, W, t);
       demo.forEach(([st, trans, carga, equipe, np], i) => {
         const b = barco({ stage: st, trans, carga, equipe, cores: PUB_CORES.slice(0, np), mapa: true });
         const ciclo = Math.max(W + 140, demo.length * 150); // mesma velocidade e espaço igual: nenhuma alcança a outra
@@ -1294,10 +1936,14 @@ window.RIO = (function () {
   const MINI_ARV = (() => { const s = new Spr(11, 13); s.rect(5, 5, 1, 7, CASCA[1]); s.ell(5, 5, 4.5, 1.6, T.dgrn[1]); s.ell(5, 4, 3.5, 1, T.dgrn[2]); s.ell(5, 2, 2.5, 1.2, T.dgrn[1]); s.set(5, 1, T.grn[2]); s.set(1, 4, T.grn[2]); s.set(9, 4, T.dgrn[2]); return s.outline().canvas(); })();
   function painel(p) {
     const grade = document.createElement('div'); grade.className = 'rio-bracos';
-    const TW = 200, TH = 92;
-    const bg = document.createElement('canvas'); bg.width = TW; bg.height = TH; const b = bg.getContext('2d');
-    dither(b, 0, 0, TW, 18, [GR[2], GR[1], GR[3]]); for (let x = 3, k = 0; x < TW - 8; x += 13 + (k * 5) % 7, k++) b.drawImage(MINI_ARV, x, 2 + (k * 3) % 4);
-    b.fillStyle = '#7a5434'; b.fillRect(0, 18, TW, 2); dither(b, 0, 20, TW, 46, [AG[0], AG[1], AG[2], AG[3], AG[4]]); dither(b, 0, 66, TW, 26, [AR[0], AR[2], AR[3], AR[4]]);
+    const TW = 200, TH = 92, e = nitida(2, 'perto');
+    grade.style.gridTemplateColumns = 'repeat(auto-fill, minmax(' + Math.ceil(TW * e + 12) + 'px, 1fr))';
+    const bg = tela(TW, TH), b = hd(bg.getContext('2d'));
+    // o mesmo chão da cena, em miniatura: gramado de lá, barranco, rio em faixas com marolas, areia com a faixa molhada e a linha de espuma
+    chao(b, 0, 0, TW, TH, [GL[0], GL[1], GL[2], ...AG, ...AR, TERRA_L[2], TERRA_L[0]], (x, y) => y < 18 ? gramaTom(x, y, .6) : y < 20 ? y - 4 : y < 66 ? 3 + aguaTom(x, y, 20, 66, AGUA_RIO, AGUA_CORTES, 3) : 9 + areiaTom(x, y, y - 66, .6));
+    for (let x = 3, k = 0; x < TW - 8; x += 13 + (k * 5) % 7, k++) { const y = 2 + (k * 3) % 4; sombra(b, x + 7, y + 12.5, 4, 1); b.drawImage(MINI_ARV, x, y); }
+    b.fillStyle = ESPUMA; for (let x = 0, k = 0; x < TW; k++) { const len = 2 + Math.floor(az(k, 90) * 5); b.fillRect(x, 65.5, len, .5); x += len + 1 + Math.floor(az(k, 91) * 4); }
+    acabamento(b, TW, TH);
     p.resumo.forEach(r => {
       const arr = p.arranjos.filter(a => a.regional === r.regional);
       const info = arr.map(a => {
@@ -1307,22 +1953,25 @@ window.RIO = (function () {
       const noRio = info.filter(i => i.ok).length;
       const fig = document.createElement('figure'); fig.className = 'rio-braco';
       const cap = document.createElement('figcaption'); cap.textContent = r.regional + ' · ' + noRio + ' de ' + arr.length + ' no rio'; fig.append(cap);
-      const caixa = document.createElement('div'); caixa.className = 'rio-caixa'; caixa.style.width = TW * 2 + 'px'; caixa.style.height = TH * 2 + 'px';
-      const canvas = document.createElement('canvas'); canvas.width = TW; canvas.height = TH; canvas.style.width = '100%'; canvas.style.height = '100%'; canvas.setAttribute('aria-hidden', 'true');
+      const caixa = document.createElement('div'); caixa.className = 'rio-caixa'; caixa.style.width = TW * e + 'px'; caixa.style.height = TH * e + 'px';
+      const canvas = tela(TW, TH); canvas.style.width = '100%'; canvas.style.height = '100%'; canvas.setAttribute('aria-hidden', 'true'); nitidez(canvas, e);
       const camada = document.createElement('div'); camada.className = 'rio-camada';
       let iA = 0, iT = 0;
       info.forEach(i => { i.x = i.ok ? 4 + (iA % 6) * 32 : 4 + (iT % 6) * 32; i.y = i.ok ? (iA++ % 2 ? 40 : 26) + Math.floor(iA / 13) * 6 : 62 + (iT++ % 2) * 6;
         const alvo = document.createElement('div'); alvo.className = 'rio-alvo'; alvo.tabIndex = 0;
         alvo.title = i.a.nome + (i.ok ? ' · no rio' : ' · na margem (incompleto)') + '\nCadeias: ' + (i.a.cadeias.join(', ') || '—') + '\nÁreas: ' + (i.a.transversais.join(', ') || '—') + '\nPúblico: ' + (i.a.publicos.join(', ') || '—') + '\nMunicípios: ' + i.a.municipios.length + ' · Equipe: ' + i.a.tecnicos + '\nParceiros: ' + ((i.a.parceiros || []).join(', ') || '—');
         alvo.setAttribute('aria-label', alvo.title);
-        Object.assign(alvo.style, { left: (i.x + 6) * 2 + 'px', top: (i.y + 6) * 2 + 'px', width: 36 + 'px', height: 26 + 'px' });
+        Object.assign(alvo.style, { left: (i.x + 6) * e + 'px', top: (i.y + 6) * e + 'px', width: 18 * e + 'px', height: 13 * e + 'px' });
         camada.append(alvo);
       });
       if (!arr.length) fig.title = 'Nenhum arranjo ainda';
       caixa.append(canvas, camada); fig.append(caixa); grade.append(fig);
-      const rr = { canvas, desenhar: t => { const ctx = canvas.getContext('2d'); ctx.imageSmoothingEnabled = false; ctx.drawImage(bg, 0, 0);
+      const rr = { canvas, desenhar: t => { const ctx = hd(canvas.getContext('2d')); ctx.drawImage(bg, 0, 0);
         ctx.fillStyle = '#e8f8ff'; for (let k = 0; k < 8; k++) if (Math.sin(t * 1.3 + k * 2) > 0) ctx.fillRect(Math.round((k * 37 + t * 6) % TW), 24 + (k * 11) % 38, 3, 1);
-        info.forEach((i, k) => { const bob = i.ok && !parado ? Math.round(Math.sin(t * 2 + k)) : 0; sombra(ctx, i.x + 16, i.y + 18 + bob, 9, 2, .2); ctx.drawImage(MINI[i.st], i.x, i.y + bob); }); } };
+        info.forEach((i, k) => { const bob = i.ok && !parado ? Math.round(Math.sin(t * 2 + k)) : 0; const L = 14 + i.st * 3, x0 = i.x + Math.round((30 - L) / 2);
+          if (i.ok) { ctx.fillStyle = AG[0]; ctx.fillRect(x0 + 3, i.y + 19, L - 5, 2); ctx.fillRect(x0 + 5, i.y + 21.5, L - 8, .5); } // na água: o tom escuro da própria água, em tiras, sem alfa e sem balanço
+          else sombra(ctx, i.x + 16, i.y + 18, 9, 2, .2);
+          ctx.drawImage(MINI[i.st], i.x, i.y + bob); }); } };
       registrar(rr);
     });
     return grade;
@@ -1335,9 +1984,9 @@ window.RIO = (function () {
     simboloParceiro, iconeFerramenta, nomeFerramenta: cod => FERRAMENTAS[simboloParceiro(cod)][0],
     estagio: zonas => ESTAGIO[zonas], cena, fundoEntrada, painel,
     // Peças de desenho para o minijogo público (jogo/index.html), que monta as próprias cenas com a mesma arte.
-    kit: { Spr, T, OL, SKINS, PUB_CORES, CASCA, GR, AG, AR, H, FAR, MARGEM, ESTRUTURAS, ESTAGIO, LOGO_P, CASA, CASA_X, CASA_Y,
-      ARVORES, ARBUSTOS, CAPIVARA, GARCA, PEDRA, TRALHA, ESCRITORIO, EMPURRA, CREW_C, BW, CY,
-      barco, desenharBarco, desenharAgua, desenharVida, desenharAves, desenharTrapiche, fundo, sombra, dither, az, tufo, painelSolar, box3, icone, parado }
+    kit: { suave, chao, gramaTom, aguaTom, areiaTom, capim, disco, sombraCaixa, acabamento, TERRA, ESPUMA, FLORES, flor, escurece, toldo, contato, Spr, T, OL, SKINS, PUB_CORES, CASCA, GR, AG, AR, H, FAR, MARGEM, ESTRUTURAS, ESTAGIO, LOGO_P, CASA, CASA_X, CASA_Y,
+      ARVORES, ARBUSTOS, CAPIVARA, GARCA, PEDRA, TRALHA, ESCRITORIO, EMPURRA, EMPURRA_PASSO, ANDAR, UNIFORME, pessoa, CREW_C, BW, CY,
+      barco, desenharBarco, desenharAgua, desenharVida, desenharAves, desenharTrapiche, desenharArvores, fundo, sombra, dither, az, tufo, painelSolar, box3, icone, parado, nitida, nitidez, HD, hd, tela, tom, rosto, chapeuPalha, telhas, chapa, janela, porta, granula, rampa, trio, contorno, distante, hash, bayer, FOLHA, tapete }
   };
 })();
 document.body.classList.toggle('modo-rio', RIO.ligado());
@@ -1403,7 +2052,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
   // Aviso que não trava a tela (no lugar de alert); some sozinho.
   function avisar(txt, erro) {
     var t = el('div', { class: 'toast' + (erro ? ' erro' : ''), role: erro ? 'alert' : 'status', text: txt });
-    $('avisos').appendChild(t);
+    $('avisos').appendChild(t); if (erro) TRILHA.sfx('erro');
     setTimeout(function () { t.remove(); }, 7000);
   }
 
@@ -1883,8 +2532,8 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
 
   function desenharCenaRio() {
     RIO.cena($('rio'), { arranjos: estado.dados.arranjos.map(infoCanoa), travado: bloqueado(), partida: !!estado.dados.concluido }, {
-      selecionar: function (a) { estado.ativo = a; desenharGrade(); desenharMetas(); $('grade').firstChild.scrollIntoView({ block: 'nearest' }); },
-      soltar: function (a, tipo, codigo) { estado.ativo = a; adicionar(a, tipo, codigo); desenharGrade(); desenharMetas(); },
+      selecionar: function (a) { estado.ativo = a; TRILHA.sfx('selecao'); desenharGrade(); desenharMetas(); $('grade').firstChild.scrollIntoView({ block: 'nearest' }); },
+      soltar: function (a, tipo, codigo) { estado.ativo = a; TRILHA.sfx('peca'); adicionar(a, tipo, codigo); desenharGrade(); desenharMetas(); },
       barraca: abrirBarraca,
       lancar: function (a) { estado.ativo = a; salvarELancar(a); desenharMetas(); }
     });
@@ -1930,7 +2579,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
     var m = TRILHA.mudo(), b = $('btnSom');
     b.textContent = m ? 'Som: mudo' : 'Som: ligado';
     b.setAttribute('aria-pressed', String(!m));
-    b.title = m ? 'Ligar a trilha Rio Acima' : 'Silenciar a trilha Rio Acima';
+    b.title = m ? 'Ligar a trilha Rio Acima e os efeitos sonoros' : 'Silenciar a trilha Rio Acima e os efeitos sonoros';
   }
   function trocarModo() {
     RIO.definir(RIO.ligado() ? 'classico' : 'rio'); botaoModo();
@@ -1982,7 +2631,7 @@ document.body.classList.toggle('modo-rio', RIO.ligado());
 
   function novo() {
     var a = { id: '', _tmp: 'tmp' + Date.now(), nome: 'Novo arranjo', descricao: '', psh: false, itens: { projeto: [], publico: [], municipio: [], tecnico: [], parceiro: [] }, metas: {} };
-    estado.dados.arranjos.unshift(a);
+    estado.dados.arranjos.unshift(a); TRILHA.sfx('nova');
     estado.ativo = a;
     desenharTudo();
     salvar(a);
