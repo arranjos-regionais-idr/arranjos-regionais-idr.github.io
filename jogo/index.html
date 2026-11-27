@@ -162,10 +162,10 @@
     // (ciclo K.ANDAR); extra = braço erguido ('cima') para votar ou erguer a ferramenta. Cada pose é pintada uma vez só.
     const gente = (skin, roupa, cabelo, q, chapeu, costas, saia, extra) => K.pessoa({ skin, roupa, cabelo, pose: q, chapeu, costas, saia, ...extra }).canvas();
     const POSES = [0, 1, 2, 3, 4];
-    SPR.ext = POSES.map(q => gente(SKINS[1], K.UNIFORME[0], '#3a2418', q, true, false));
-    SPR.extCostas = POSES.map(q => gente(SKINS[1], K.UNIFORME[0], '#3a2418', q, true, true));
-    SPR.extErgue = gente(SKINS[1], K.UNIFORME[0], '#3a2418', 0, true, false, false, { dir: 'cima' });
-    SPR.colegas = [0, 1].map(i => gente(SKINS[i * 2], K.UNIFORME[1 - i], '#2a1a14', 0, true, false));
+    SPR.ext = POSES.map(q => gente(SKINS[1], K.UNIFORME[0], '#3a2418', q, true, false, false, { mulher: true })); /* a extensionista da cadeia */
+    SPR.extCostas = POSES.map(q => gente(SKINS[1], K.UNIFORME[0], '#3a2418', q, true, true, false, { mulher: true }));
+    SPR.extErgue = gente(SKINS[1], K.UNIFORME[0], '#3a2418', 0, true, false, false, { dir: 'cima', mulher: true });
+    SPR.colegas = [0, 1].map(i => gente(SKINS[i * 2], K.UNIFORME[1 - i], '#2a1a14', 0, true, false, false, { mulher: i === 1 }));
     const ROUPAS = [T.red, T.wht, T.crm, T.lea],prod = (i, q, extra) => gente(SKINS[(i + 2) % 4], ROUPAS[i], i % 2 ? '#1c1424' : '#5a3622', q, false, false, i % 2 === 0, extra); // roupas mais claras ou mais escuras que a grama, verde ou seca
     SPR.prod = [0, 1, 2, 3].map(i => POSES.map(q => prod(i, q)));
     SPR.prodVoto = [0, 1, 2, 3].map(i => prod(i, 0, { esq: 'cima' }));

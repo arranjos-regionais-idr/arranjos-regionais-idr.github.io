@@ -1022,7 +1022,7 @@ window.RIO = (function () {
   const JEANS = [T.mus[1], T.blu[0]], BOTA = [T.brn[0], T.brn[1]]; // [sombra, base]; a calça escura não empata com a grama
   const UNIFORME = [T.dgrn, trio(tom(T.grn[1], -.5))]; // camisas da equipe: verdes mais escuros que a grama e que a areia
   const PES = [[18, 18], [18, 17], [17, 18], [18, 16], [16, 18]], ANDAR = [1, 3, 2, 4], EMPURRA_PASSO = [0, 3, 1, 4];
-  /** o = { skin, roupa, cabelo, chapeu, costas, saia, pose, esq, dir, curvado }; esq e dir: 'cima' (braço erguido) ou 'empurra'. Devolve o Spr já com contorno. */
+  /** o = { skin, roupa, cabelo, chapeu, costas, saia, mulher, pose, esq, dir, curvado }; mulher: cabelo comprido que aparece sob o chapéu; esq e dir: 'cima' (braço erguido) ou 'empurra'. Devolve o Spr já com contorno. */
   function pessoa(o) {
     const s = new Spr(12, 18), { skin, roupa, chapeu, costas, saia } = o, cabelo = o.cabelo || T.brn[0], pose = o.pose || 0, cy = o.curvado ? 2.5 : 0; // curvado: cabeça baixa de quem empurra
     const perna = saia ? skin : JEANS, y0 = saia ? 14.5 : 13; s.liso = true; // boneco posto pixel a pixel: sem alisar (regra 9.13)
@@ -1040,6 +1040,7 @@ window.RIO = (function () {
     if (!costas) rosto(s, 4, 3 + cy, skin, 4, chapeu ? 1.5 : 2, 1.5); // a aba ou a franja cobre meio pixel; sobra uma linha de sombra acima dos olhos
     else if (o.curvado) s.rect(4, 3 + cy, 4, 1.5, cabelo);
     else { s.rect(4, 3, 4, 3.5, cabelo); s.rect(4.5, 6.5, 3, .5, skin[0]); } // nuca na sombra da cabeça
+    if (o.mulher) { if (costas) s.rect(3.5, 3 + cy, 5, o.curvado ? 4.5 : 6, cabelo); else { s.rect(3, 3.5, 1, 5.5, cabelo); s.rect(8, 3.5, 1, 5.5, cabelo); } } /* cabelo solto até os ombros, por baixo do chapéu */
     if (chapeu) chapeuPalha(s, 1, cy);
     else {
       s.rect(3.5, 2, 5, 2, cabelo); s.rect(4, 2, 2, .5, tom(cabelo, 1.5)); // a franja cobre a linha de cima do rosto
@@ -1047,15 +1048,16 @@ window.RIO = (function () {
     }
     return s.outline('comum');
   }
-  const crewSpr = (skin, shirt) => pessoa({ skin, roupa: shirt, chapeu: true }); // extensionista de pé, de frente
-  const CREW = [0, 1, 2, 3].map(i => crewSpr(SKINS[i], UNIFORME[i % 2]));
+  const CABELOS = [T.brn[0], T.lea[0], T.mus[0], T.brn[1]]; // a equipe alterna homens e mulheres (índices ímpares)
+  const crewSpr = (skin, shirt, i = 0) => pessoa({ skin, roupa: shirt, chapeu: true, mulher: i % 2 === 1, cabelo: CABELOS[i % 4] }); // extensionista de pé, de frente
+  const CREW = [0, 1, 2, 3].map(i => crewSpr(SKINS[i], UNIFORME[i % 2], i));
   const CREW_C = CREW.map(c => c.canvas());
   // Extensionista de costas. Quadros 0 e 1: contato, empurrando de braços esticados; 2: acenando da beira; 3 e 4: passagem, depois de 0 e de 1.
-  function empurrador(skin, shirt, q) {
-    const base = { skin, roupa: shirt, chapeu: true, costas: true };
+  function empurrador(skin, shirt, q, i = 0) {
+    const base = { skin, roupa: shirt, chapeu: true, costas: true, mulher: i % 2 === 1, cabelo: CABELOS[i % 4] };
     return pessoa(q === 2 ? { ...base, dir: 'cima' } : { ...base, curvado: true, esq: 'empurra', dir: 'empurra', pose: [2, 1, 0, 4, 3][q] }).canvas();
   }
-  const EMPURRA = [0, 1, 2, 3, 4].map(q => [0, 1, 2].map(i => empurrador(SKINS[i], UNIFORME[i % 2], q)));
+  const EMPURRA = [0, 1, 2, 3, 4].map(q => [0, 1, 2].map(i => empurrador(SKINS[i], UNIFORME[i % 2], q, i)));
 
   // ---------- embarcação vista de cima, em 3/4 ----------
   const BW = 128, BH = 96, CY = 66;
